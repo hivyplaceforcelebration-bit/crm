@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, Suspense } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { FullWidthCalendar } from "@/components/booking-calendar"
@@ -59,7 +59,7 @@ import { getPackages, type Package } from "@/lib/actions/packages"
 import { createInvoiceFromBooking } from "@/lib/actions/invoices"
 import { useBrand } from "@/hooks/use-brand"
 import { toast } from "sonner"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 
 const bookingStatusConfig: Record<string, { label: string; color: string; icon: any }> = {
   pending:   { label: "Pending",   color: "bg-yellow-100 text-yellow-800", icon: AlertCircle },
@@ -101,8 +101,9 @@ const defaultForm = {
   notes: "",
 }
 
-export default function BookingsPage() {
+function BookingsPageInner() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { activeCity, isReady } = useBrand()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [packages, setPackages] = useState<Package[]>([])
@@ -130,6 +131,23 @@ export default function BookingsPage() {
       }))
     }
   }, [activeCity, isReady])
+
+  // Quick-add from Calendar: /protected/bookings?new=1&date=...&slot=...&outlet=...
+  useEffect(() => {
+    if (searchParams.get("new") !== "1") return
+    const date = searchParams.get("date")
+    const slot = searchParams.get("slot")
+    const outletParam = searchParams.get("outlet")
+    setForm((f) => ({
+      ...f,
+      booking_date: date || f.booking_date,
+      time_slot: slot || f.time_slot,
+      outlet: outletParam && outletParam !== "all" ? outletParam : f.outlet,
+    }))
+    setShowNewDialog(true)
+    router.replace("/protected/bookings")
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const load = useCallback(async () => {
     if (!isReady) return
@@ -725,5 +743,13 @@ export default function BookingsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function BookingsPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-muted-foreground">Loading…</div>}>
+      <BookingsPageInner />
+    </Suspense>
   )
 }

@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  Megaphone, MessageSquare, Users, Plus, Trash2, Send, RefreshCw, Loader2,
+  Megaphone, MessageSquare, Users, Plus, Trash2, Send, RefreshCw, Loader2, Construction,
 } from "lucide-react"
 import { toast } from "sonner"
 import {
@@ -106,14 +106,14 @@ export default function MarketingPage() {
         message: campaignMessage,
         audience_filter: filters as Record<string, unknown>,
         sent_count: audience.length,
-        status: "sent",
+        status: "logged",
       })
-      toast.success(`Campaign sent to ${audience.length} customers`)
+      toast.success(`Campaign logged for ${audience.length} customers`)
       setShowNewCampaign(false)
       resetCampaignForm()
       load()
     } catch {
-      toast.error("Failed to send campaign")
+      toast.error("Failed to log campaign")
     } finally {
       setSending(false)
     }
@@ -158,7 +158,7 @@ export default function MarketingPage() {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Marketing</h1>
-          <p className="text-muted-foreground">Send WhatsApp campaigns and manage message templates</p>
+          <p className="text-muted-foreground">Build customer audiences and manage message templates</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -174,9 +174,14 @@ export default function MarketingPage() {
             </DialogTrigger>
             <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>New WhatsApp Campaign</DialogTitle>
-                <DialogDescription>Build an audience, write a message, and send.</DialogDescription>
+                <DialogTitle>New Campaign</DialogTitle>
+                <DialogDescription>Build an audience and write a message.</DialogDescription>
               </DialogHeader>
+
+              <div className="flex items-center gap-2 p-3 rounded-lg border border-dashed text-sm text-muted-foreground">
+                <Construction className="h-4 w-4 shrink-0" />
+                No sending channel is connected yet — this logs the campaign and audience for now, it doesn&apos;t send real messages.
+              </div>
 
               <div className="space-y-4 py-2">
                 <div className="grid gap-2">
@@ -265,7 +270,7 @@ export default function MarketingPage() {
                 <Button variant="outline" onClick={() => setShowNewCampaign(false)}>Cancel</Button>
                 <Button onClick={handleSendCampaign} disabled={sending || audience.length === 0}>
                   {sending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-                  Send to {audience.length} Customer{audience.length === 1 ? "" : "s"}
+                  Log Campaign for {audience.length} Customer{audience.length === 1 ? "" : "s"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -289,7 +294,7 @@ export default function MarketingPage() {
           <Card>
             <CardHeader>
               <CardTitle className="text-base">Campaign History</CardTitle>
-              <CardDescription>WhatsApp campaigns sent to your customers</CardDescription>
+              <CardDescription>Logged campaigns — not connected to a real sending channel yet</CardDescription>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -297,8 +302,8 @@ export default function MarketingPage() {
               ) : campaigns.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">
                   <Megaphone className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                  <p>No campaigns sent yet</p>
-                  <p className="text-sm">Create your first campaign to reach your customers</p>
+                  <p>No campaigns logged yet</p>
+                  <p className="text-sm">Create your first campaign to build a targeted audience</p>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -308,12 +313,12 @@ export default function MarketingPage() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="font-medium">{c.name}</p>
                           <Badge variant="outline" className="text-green-600">{c.channel}</Badge>
-                          <Badge variant={c.status === "sent" ? "default" : "secondary"}>{c.status}</Badge>
+                          <Badge variant="secondary">{c.status === "sent" ? "logged" : c.status}</Badge>
                         </div>
                         <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{c.message}</p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-sm font-medium">{c.sent_count} sent</p>
+                        <p className="text-sm font-medium">{c.sent_count} in audience</p>
                         <p className="text-xs text-muted-foreground">
                           {c.sent_at ? new Date(c.sent_at).toLocaleDateString() : "—"}
                         </p>
@@ -339,7 +344,7 @@ export default function MarketingPage() {
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>New Message Template</DialogTitle>
-                  <DialogDescription>Reusable WhatsApp message for campaigns</DialogDescription>
+                  <DialogDescription>Reusable message for campaigns</DialogDescription>
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">

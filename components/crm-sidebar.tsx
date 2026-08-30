@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,8 +19,10 @@ import {
   MapPin,
   Clock,
   UserCog,
+  Search,
 } from "lucide-react"
 import { useState } from "react"
+import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 
@@ -48,8 +50,15 @@ const settingsItems = [
 
 export function CRMSidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const { activeBrand } = useBrand()
   const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/protected/settings"))
+  const [searchValue, setSearchValue] = useState("")
+
+  const runSearch = () => {
+    if (!searchValue.trim()) return
+    router.push(`/protected/customers?search=${encodeURIComponent(searchValue.trim())}`)
+  }
 
   const SidebarContent = () => (
     <div className="flex h-full flex-col bg-card">
@@ -109,9 +118,15 @@ export function CRMSidebar() {
       </nav>
 
       <div className="border-t p-4">
-        <div className="rounded-lg bg-primary/5 p-3">
-          <p className="text-xs text-muted-foreground">Quick Search</p>
-          <p className="text-xs text-muted-foreground mt-1">Press <kbd className="px-1 py-0.5 bg-muted rounded text-xs">⌘K</kbd> to search</p>
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search customers…"
+            value={searchValue}
+            onChange={(e) => setSearchValue(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && runSearch()}
+            className="h-8 pl-8 text-xs"
+          />
         </div>
       </div>
     </div>

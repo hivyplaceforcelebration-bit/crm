@@ -1,6 +1,7 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -21,10 +22,21 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import {
-  getCustomers, createCustomer, getCustomerStats, type Customer,
+  getCustomers, createCustomer, updateCustomer, getCustomerStats, type Customer,
 } from "@/lib/actions/customers"
 import { useBrand } from "@/hooks/use-brand"
 import { toast } from "sonner"
+
+function toCsv(customers: Customer[]) {
+  const headers = ["Name", "Phone", "Email", "City", "Total Spend", "Total Bookings", "Last Visit", "Tags"]
+  const rows = customers.map((c) => [
+    c.name, c.phone, c.email || "", c.city, c.total_spend, c.total_bookings,
+    c.last_visit || "", (c.tags || []).join("; "),
+  ])
+  return [headers, ...rows]
+    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    .join("\n")
+}
 
 const tagColors: Record<string, string> = {
   "VIP":                 "bg-amber-500 text-white",
@@ -41,18 +53,22 @@ const defaultForm = {
   source: "instagram", notes: "", consent_whatsapp: true,
 }
 
-export default function CustomersPage() {
+function CustomersPageInner() {
+  const searchParams = useSearchParams()
   const { activeCity, isReady } = useBrand()
   const [customers, setCustomers] = useState<Customer[]>([])
   const [stats, setStats] = useState({ total: 0, vip: 0, totalRevenue: 0, avgSpend: 0, whatsappOptIn: 0 })
   const [loading, setLoading] = useState(true)
-  const [searchQuery, setSearchQuery] = useState("")
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("search") || "")
   const [selectedCity, setSelectedCity] = useState("all")
   const [selectedTag, setSelectedTag] = useState("all")
   const [spendFilter, setSpendFilter] = useState("all")
   const [visitFilter, setVisitFilter] = useState("all")
   const [showFilters, setShowFilters] = useState(false)
   const [showAddDialog, setShowAddDialog] = useState(false)
+  const [showTagDialog, setShowTagDialog] = useState(false)
+  const [bulkTag, setBulkTag] = useState("")
+  const [tagging, setTagging] = useState(false)
   const [selectedCustomers, setSelectedCustomers] = useState<string[]>([])
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(defaultForm)
@@ -137,6 +153,46 @@ export default function CustomersPage() {
     )
   }
 
+  const handleExport = () => {
+    if (customers.length === 0) {
+      toast.error("No customers to export")
+      return
+    }
+    const blob = new Blob([toCsv(customers)], { type: "text/csv;charset=utf-8;" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `customers-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleBulkTag = async () => {
+    if (!bulkTag.trim()) {
+      toast.error("Enter a tag name")
+      return
+    }
+    setTagging(true)
+    try {
+      await Promise.all(
+        selectedCustomers.map((id) => {
+          const c = customers.find((x) => x.id === id)
+          const tags = Array.from(new Set([...(c?.tags || []), bulkTag.trim()]))
+          return updateCustomer(id, { tags })
+        })
+      )
+      toast.success(`Tagged ${selectedCustomers.length} customer${selectedCustomers.length > 1 ? "s" : ""}`)
+      setShowTagDialog(false)
+      setBulkTag("")
+      setSelectedCustomers([])
+      load()
+    } catch {
+      toast.error("Failed to tag customers")
+    } finally {
+      setTagging(false)
+    }
+  }
+
   const isPhoneSearch = searchQuery.replace(/\s/g, "").match(/^\+?\d{8,}$/)
 
   return (
@@ -151,7 +207,7 @@ export default function CustomersPage() {
           <Button variant="outline" size="icon" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" onClick={handleExport}>
             <Download className="h-4 w-4 mr-2" />Export
           </Button>
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -350,8 +406,30 @@ export default function CustomersPage() {
                 {selectedCustomers.length} customer{selectedCustomers.length > 1 ? "s" : ""} selected
               </p>
               <div className="flex gap-2">
-                <Button variant="outline" size="sm"><Tag className="h-4 w-4 mr-2" />Add Tag</Button>
-                <Button variant="outline" size="sm"><Send className="h-4 w-4 mr-2" />Send Campaign</Button>
+                <Dialog open={showTagDialog} onOpenChange={setShowTagDialog}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" size="sm"><Tag className="h-4 w-4 mr-2" />Add Tag</Button>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-sm">
+                    <DialogHeader>
+                      <DialogTitle>Add Tag</DialogTitle>
+                      <DialogDescription>
+                        Apply a tag to {selectedCustomers.length} selected customer{selectedCustomers.length > 1 ? "s" : ""}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-2 py-2">
+                      <Label>Tag Name</Label>
+                      <Input value={bulkTag} onChange={(e) => setBulkTag(e.target.value)} placeholder="e.g., VIP" />
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowTagDialog(false)}>Cancel</Button>
+                      <Button onClick={handleBulkTag} disabled={tagging}>{tagging ? "Tagging..." : "Apply Tag"}</Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                <Button variant="outline" size="sm" asChild>
+                  <Link href="/protected/marketing"><Send className="h-4 w-4 mr-2" />Build Campaign</Link>
+                </Button>
                 <Button variant="ghost" size="sm" onClick={() => setSelectedCustomers([])}>Clear</Button>
               </div>
             </div>
@@ -493,5 +571,13 @@ export default function CustomersPage() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function CustomersPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-muted-foreground">Loading…</div>}>
+      <CustomersPageInner />
+    </Suspense>
   )
 }

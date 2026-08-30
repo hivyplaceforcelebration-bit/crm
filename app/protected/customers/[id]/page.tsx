@@ -24,7 +24,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const { data: customer } = await supabase.from("customers").select("*").eq("id", id).single()
 
   if (!customer) {
-    redirect("/protected")
+    redirect("/protected/customers")
   }
 
   // Fetch customer orders
@@ -55,7 +55,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         <div className="mx-auto max-w-7xl space-y-6">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" asChild>
-              <Link href="/protected">
+              <Link href="/protected/customers">
                 <ArrowLeft className="h-5 w-5" />
               </Link>
             </Button>
@@ -130,14 +130,14 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                     {orders.slice(0, 5).map((order) => (
                       <div key={order.id} className="flex items-center justify-between border-b pb-3 last:border-0">
                         <div>
-                          <p className="font-mono text-sm font-medium">{order.order_number}</p>
+                          <p className="font-mono text-sm font-medium">#{order.id.slice(0, 8)}</p>
                           <p className="text-xs text-muted-foreground">
                             {new Date(order.created_at).toLocaleDateString()}
                           </p>
                         </div>
                         <div className="flex items-center gap-3">
                           <Badge variant={order.status === "completed" ? "default" : "outline"}>{order.status}</Badge>
-                          <p className="font-semibold">${Number(order.total_amount).toFixed(2)}</p>
+                          <p className="font-semibold">₹{Number(order.total_amount).toLocaleString("en-IN")}</p>
                         </div>
                       </div>
                     ))}
@@ -168,8 +168,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                           </p>
                         </div>
                         <div>
-                          <Badge variant={transaction.transaction_type === "earned" ? "default" : "secondary"}>
-                            {transaction.transaction_type === "earned" ? "+" : "-"}
+                          <Badge variant={transaction.type === "earned" ? "default" : "secondary"}>
+                            {transaction.type === "earned" ? "+" : "-"}
                             {Math.abs(transaction.points)} pts
                           </Badge>
                         </div>

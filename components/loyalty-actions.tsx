@@ -60,7 +60,7 @@ export function LoyaltyActions({ customerId, currentPoints }: LoyaltyActionsProp
     const { error: transactionError } = await supabase.from("loyalty_transactions").insert({
       customer_id: customerId,
       points: type === "earned" ? pointsValue : -pointsValue,
-      transaction_type: type,
+      type,
       description: description || `Points ${type}`,
     })
 

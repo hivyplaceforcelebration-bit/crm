@@ -1,6 +1,27 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
 
+// In-memory sliding-window rate limit, per IP. Resets when the serverless
+// instance recycles — not a substitute for a shared store (e.g. Upstash) at
+// scale, but it stops basic single-instance abuse without external deps.
+const RATE_LIMIT_MAX = 10
+const RATE_LIMIT_WINDOW_MS = 60_000
+const requestLog = new Map<string, number[]>()
+
+function isRateLimited(ip: string): boolean {
+  const now = Date.now()
+  const timestamps = (requestLog.get(ip) || []).filter((t) => now - t < RATE_LIMIT_WINDOW_MS)
+  timestamps.push(now)
+  requestLog.set(ip, timestamps)
+  if (requestLog.size > 5000) requestLog.clear() // crude cap on unbounded growth
+  return timestamps.length > RATE_LIMIT_MAX
+}
+
+function getClientIp(request: NextRequest): string {
+  const forwarded = request.headers.get("x-forwarded-for")
+  return forwarded?.split(",")[0]?.trim() || "unknown"
+}
+
 const ALLOWED_ORIGINS = [
   // CRM itself
   "https://crm.bookmymoment.in",
@@ -66,6 +87,13 @@ export async function POST(request: NextRequest) {
 
   if (!isAllowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: corsHeaders(origin) })
+  }
+
+  if (isRateLimited(getClientIp(request))) {
+    return NextResponse.json(
+      { error: "Too many requests, please try again shortly" },
+      { status: 429, headers: corsHeaders(origin) }
+    )
   }
 
   try {

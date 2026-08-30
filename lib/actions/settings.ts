@@ -1,6 +1,7 @@
 "use server"
 
 import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 import { revalidatePath } from "next/cache"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -113,6 +114,104 @@ export async function toggleTimeSlotActive(id: string, is_active: boolean) {
 export async function deleteTimeSlot(id: string) {
   const supabase = await createClient()
   const { error } = await supabase.from("time_slots").delete().eq("id", id)
+  if (error) throw error
+  revalidatePath("/protected/settings")
+}
+
+// ── User Roles ────────────────────────────────────────────────────────────────
+
+export type UserRole = {
+  id: string
+  email: string
+  name: string | null
+  role: string
+  outlet_access: string
+  is_active: boolean
+  created_at: string
+}
+
+export async function getUserRoles(): Promise<UserRole[]> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("*")
+    .order("created_at", { ascending: true })
+  if (error) throw error
+  return data as UserRole[]
+}
+
+export async function createStaffUser(input: {
+  email: string
+  password: string
+  name: string
+  role: string
+  outlet_access: string
+}) {
+  const admin = createAdminClient()
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email: input.email,
+    password: input.password,
+    email_confirm: true,
+    user_metadata: { name: input.name },
+  })
+  if (createError) throw createError
+
+  const supabase = await createClient()
+  const { error: roleError } = await supabase.from("user_roles").insert({
+    id: created.user.id,
+    email: input.email,
+    name: input.name,
+    role: input.role,
+    outlet_access: input.outlet_access,
+  })
+  if (roleError) throw roleError
+
+  revalidatePath("/protected/settings")
+}
+
+export async function updateUserRole(
+  id: string,
+  updates: Partial<Pick<UserRole, "role" | "outlet_access" | "is_active" | "name">>
+) {
+  const supabase = await createClient()
+  const { error } = await supabase.from("user_roles").update(updates).eq("id", id)
+  if (error) throw error
+  revalidatePath("/protected/settings")
+}
+
+// ── Business Settings (General + Policies) ──────────────────────────────────────
+
+export type BusinessSettings = {
+  business_name: string
+  gstin: string | null
+  support_email: string | null
+  support_phone: string | null
+  full_payment_required: boolean
+  min_advance_percent: number
+  min_advance_booking_hours: number
+  max_advance_booking_days: number
+  gst_rate: number
+  prices_inclusive_tax: boolean
+  cancellation_policy: string
+}
+
+export async function getBusinessSettings(): Promise<BusinessSettings> {
+  const supabase = await createClient()
+  const { data, error } = await supabase
+    .from("business_settings")
+    .select("*")
+    .eq("id", 1)
+    .single()
+  if (error) throw error
+  return data as BusinessSettings
+}
+
+export async function updateBusinessSettings(updates: Partial<BusinessSettings>) {
+  const supabase = await createClient()
+  const { error } = await supabase
+    .from("business_settings")
+    .update({ ...updates, updated_at: new Date().toISOString() })
+    .eq("id", 1)
   if (error) throw error
   revalidatePath("/protected/settings")
 }

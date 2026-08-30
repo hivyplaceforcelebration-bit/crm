@@ -34,6 +34,7 @@ import { getBookingsByWeek, type Booking } from "@/lib/actions/bookings"
 import { useBrand } from "@/hooks/use-brand"
 import { toast } from "sonner"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 
 const TIME_SLOTS = [
   "4:00 PM - 6:00 PM",
@@ -85,6 +86,7 @@ function getWeekDates(anchor: Date) {
 }
 
 export default function CalendarPage() {
+  const router = useRouter()
   const { activeCity, isReady } = useBrand()
   const [anchor, setAnchor]     = useState(() => new Date())
   const [outlet, setOutlet]     = useState("all")
@@ -134,6 +136,12 @@ export default function CalendarPage() {
     const d = new Date(anchor)
     d.setDate(d.getDate() + dir * 7)
     setAnchor(d)
+  }
+
+  const quickAdd = (dateKey: string, slot: string) => {
+    const params = new URLSearchParams({ new: "1", date: dateKey, slot })
+    if (outlet !== "all") params.set("outlet", outlet)
+    router.push(`/protected/bookings?${params.toString()}`)
   }
 
   // Stats
@@ -310,9 +318,10 @@ export default function CalendarPage() {
                             "p-1.5 rounded-lg border-2 min-h-[64px] transition-colors",
                             main
                               ? cn(statusColors[main.status] || "bg-blue-50 border-blue-200", "cursor-pointer")
-                              : "bg-green-50 border-green-200 hover:bg-green-100 cursor-default"
+                              : "bg-green-50 border-green-200 hover:bg-green-100 cursor-pointer"
                           )}
-                          onClick={() => main && setSelected(main)}
+                          onClick={() => main ? setSelected(main) : quickAdd(dateKey, slot)}
+                          title={main ? undefined : "Click to create a booking in this slot"}
                         >
                           {main ? (
                             <div className="space-y-0.5">
@@ -331,7 +340,7 @@ export default function CalendarPage() {
                               )}
                             </div>
                           ) : (
-                            <div className="h-full flex items-center justify-center opacity-30">
+                            <div className="h-full flex items-center justify-center opacity-30 hover:opacity-70">
                               <Plus className="h-3 w-3" />
                             </div>
                           )}

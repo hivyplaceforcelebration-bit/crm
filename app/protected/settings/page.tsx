@@ -15,28 +15,23 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
   Building2, Clock, Users, Bell, FileText, Plus, Edit, Trash2,
-  MapPin, Phone, Mail, Settings2, MessageSquare, Loader2, Construction,
+  MapPin, Phone, Mail, Settings2, MessageSquare, Loader2, ShieldCheck,
 } from "lucide-react"
 import { toast } from "sonner"
 import {
   getOutlets, createOutlet, updateOutlet, toggleOutletActive,
   getTimeSlots, createTimeSlot, toggleTimeSlotActive, deleteTimeSlot,
-  type Outlet, type TimeSlot,
+  getUserRoles, createStaffUser, updateUserRole,
+  getBusinessSettings, updateBusinessSettings,
+  type Outlet, type TimeSlot, type UserRole, type BusinessSettings,
 } from "@/lib/actions/settings"
 import { getTemplates, saveTemplate, deleteTemplate, type MessageTemplate } from "@/lib/actions/marketing"
 
 const defaultOutletForm = { name: "", city: "", address: "", phone: "", email: "", capacity: 8 }
 const defaultSlotForm = { slot_name: "", start_time: "16:00", end_time: "17:30", capacity: 1 }
 const defaultTemplateForm = { name: "", body: "", category: "transactional" }
-
-function NotWiredBanner() {
-  return (
-    <div className="flex items-center gap-2 p-3 rounded-lg border border-dashed text-sm text-muted-foreground">
-      <Construction className="h-4 w-4 shrink-0" />
-      Not yet connected to the database — changes here won&apos;t be saved.
-    </div>
-  )
-}
+const defaultUserForm = { email: "", password: "", name: "", role: "staff", outlet_access: "all" }
+const roleLabels: Record<string, string> = { admin: "Admin", manager: "Manager", agent: "Agent", staff: "Staff" }
 
 function SettingsPageInner() {
   const searchParams = useSearchParams()
@@ -62,15 +57,31 @@ function SettingsPageInner() {
   const [templateForm, setTemplateForm] = useState(defaultTemplateForm)
   const [savingTemplate, setSavingTemplate] = useState(false)
 
+  // Users & roles
+  const [users, setUsers] = useState<UserRole[]>([])
+  const [showAddUser, setShowAddUser] = useState(false)
+  const [userForm, setUserForm] = useState(defaultUserForm)
+  const [savingUser, setSavingUser] = useState(false)
+
+  // Business settings (general + policies)
+  const [business, setBusiness] = useState<BusinessSettings | null>(null)
+  const [businessForm, setBusinessForm] = useState<BusinessSettings | null>(null)
+  const [savingBusiness, setSavingBusiness] = useState(false)
+
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [o, s, t] = await Promise.all([getOutlets(), getTimeSlots(), getTemplates()])
+      const [o, s, t, u, b] = await Promise.all([
+        getOutlets(), getTimeSlots(), getTemplates(), getUserRoles(), getBusinessSettings(),
+      ])
       setOutlets(o)
       setSlots(s)
       setTemplates(t)
+      setUsers(u)
+      setBusiness(b)
+      setBusinessForm(b)
     } catch {
       toast.error("Failed to load settings")
     } finally {
@@ -180,6 +191,66 @@ function SettingsPageInner() {
       toast.error("Failed to delete template")
     }
   }
+
+  // ── Users & Roles ───────────────────────────────────────────────────────────
+  const handleCreateUser = async () => {
+    if (!userForm.email.trim() || !userForm.password || !userForm.name.trim()) {
+      toast.error("Name, email, and password are required")
+      return
+    }
+    if (userForm.password.length < 6) {
+      toast.error("Password must be at least 6 characters")
+      return
+    }
+    setSavingUser(true)
+    try {
+      await createStaffUser(userForm)
+      toast.success("User created")
+      setShowAddUser(false)
+      setUserForm(defaultUserForm)
+      load()
+    } catch (e: any) {
+      toast.error(e.message || "Failed to create user")
+    } finally {
+      setSavingUser(false)
+    }
+  }
+
+  const handleToggleUserActive = async (u: UserRole) => {
+    try {
+      await updateUserRole(u.id, { is_active: !u.is_active })
+      load()
+    } catch {
+      toast.error("Failed to update user")
+    }
+  }
+
+  const handleRoleChange = async (id: string, role: string) => {
+    try {
+      await updateUserRole(id, { role })
+      toast.success("Role updated")
+      load()
+    } catch {
+      toast.error("Failed to update role")
+    }
+  }
+
+  // ── Business Settings ───────────────────────────────────────────────────────
+  const handleSaveBusiness = async () => {
+    if (!businessForm) return
+    setSavingBusiness(true)
+    try {
+      await updateBusinessSettings(businessForm)
+      toast.success("Settings saved")
+      setBusiness(businessForm)
+    } catch {
+      toast.error("Failed to save settings")
+    } finally {
+      setSavingBusiness(false)
+    }
+  }
+
+  const businessDirty = business && businessForm && JSON.stringify(business) !== JSON.stringify(businessForm)
 
   return (
     <div className="flex-1 space-y-4 p-4 md:p-6 pt-4">
@@ -415,21 +486,150 @@ function SettingsPageInner() {
           </Card>
         </TabsContent>
 
-        {/* Users Tab — not wired: no auth/roles table in schema yet */}
+        {/* Users Tab — real, backed by user_roles + Supabase Auth Admin API */}
         <TabsContent value="users" className="mt-4 space-y-4">
-          <NotWiredBanner />
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">User Management</h2>
-            <Button size="sm" disabled>
-              <Plus className="h-4 w-4 mr-2" />
-              Add User
-            </Button>
+            <Dialog open={showAddUser} onOpenChange={setShowAddUser}>
+              <DialogTrigger asChild>
+                <Button size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add User
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add New User</DialogTitle>
+                  <DialogDescription>Creates a real login account for this person</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label>Full Name</Label>
+                    <Input value={userForm.name} onChange={(e) => setUserForm((f) => ({ ...f, name: e.target.value }))} placeholder="Enter name" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Email</Label>
+                    <Input type="email" value={userForm.email} onChange={(e) => setUserForm((f) => ({ ...f, email: e.target.value }))} placeholder="user@friendsfactory.cafe" />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Temporary Password</Label>
+                    <Input type="password" value={userForm.password} onChange={(e) => setUserForm((f) => ({ ...f, password: e.target.value }))} placeholder="At least 6 characters" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="grid gap-2">
+                      <Label>Role</Label>
+                      <Select value={userForm.role} onValueChange={(v) => setUserForm((f) => ({ ...f, role: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="manager">Manager</SelectItem>
+                          <SelectItem value="agent">Agent</SelectItem>
+                          <SelectItem value="staff">Staff</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="grid gap-2">
+                      <Label>Outlet Access</Label>
+                      <Select value={userForm.outlet_access} onValueChange={(v) => setUserForm((f) => ({ ...f, outlet_access: v }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Outlets</SelectItem>
+                          <SelectItem value="Surat">Surat</SelectItem>
+                          <SelectItem value="Vadodara">Vadodara</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowAddUser(false)}>Cancel</Button>
+                  <Button onClick={handleCreateUser} disabled={savingUser}>
+                    {savingUser && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Add User
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
+
           <Card>
-            <CardContent className="text-center py-12 text-muted-foreground">
-              <Users className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>User &amp; role management needs a backing table and an invite flow via the Supabase Admin API.</p>
-              <p className="text-sm">Not built yet — ask to scope this as its own feature.</p>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Outlet Access</TableHead>
+                    <TableHead className="text-center">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">Loading…</TableCell></TableRow>
+                  ) : users.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center text-muted-foreground py-8">No users yet</TableCell></TableRow>
+                  ) : (
+                    users.map((u) => (
+                      <TableRow key={u.id}>
+                        <TableCell className="font-medium">{u.name || "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">{u.email}</TableCell>
+                        <TableCell>
+                          <Select value={u.role} onValueChange={(v) => handleRoleChange(u.id, v)}>
+                            <SelectTrigger className="w-[120px] h-8"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {Object.entries(roleLabels).map(([v, label]) => (
+                                <SelectItem key={v} value={v}>{label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>{u.outlet_access === "all" ? "All Outlets" : u.outlet_access}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge
+                            variant={u.is_active ? "default" : "secondary"}
+                            className={`cursor-pointer ${u.is_active ? "bg-emerald-500" : ""}`}
+                            onClick={() => handleToggleUserActive(u)}
+                          >
+                            {u.is_active ? "active" : "inactive"}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Role Permissions Reference</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {[
+                  { role: "Admin", permissions: ["Full Access", "Settings", "Users", "Reports"] },
+                  { role: "Manager", permissions: ["Bookings", "Customers", "Reports", "Staff"] },
+                  { role: "Agent", permissions: ["Leads", "Bookings", "Customers", "Payments"] },
+                  { role: "Staff", permissions: ["View Bookings", "Check-in", "Operations"] },
+                ].map((item) => (
+                  <div key={item.role} className="p-3 border rounded-lg">
+                    <p className="font-medium mb-2">{item.role}</p>
+                    <div className="space-y-1">
+                      {item.permissions.map((perm) => (
+                        <div key={perm} className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <ShieldCheck className="h-3 w-3 text-emerald-500" />
+                          {perm}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                Reference only — these permissions aren&apos;t enforced in the app yet; every logged-in user currently has the same access regardless of role.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -519,59 +719,180 @@ function SettingsPageInner() {
               </Table>
             </CardContent>
           </Card>
-
-          <NotWiredBanner />
-          <div className="grid gap-4 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">WhatsApp Business API</CardTitle>
-                <CardDescription>Not connected — templates above are stored, but nothing sends automatically yet</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Badge variant="outline">Not connected</Badge>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Email Settings</CardTitle>
-                <CardDescription>No SMTP integration configured</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Badge variant="outline">Not connected</Badge>
-              </CardContent>
-            </Card>
-          </div>
         </TabsContent>
 
-        {/* Policies Tab — not wired: no settings table in schema yet */}
+        {/* Policies Tab — real, backed by business_settings */}
         <TabsContent value="policies" className="mt-4 space-y-4">
-          <NotWiredBanner />
           <h2 className="text-lg font-semibold">Business Policies</h2>
-          <p className="text-sm text-muted-foreground">
-            Payment, cancellation, booking, and tax policies would need a dedicated settings table — not built yet.
-          </p>
+          {!businessForm ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Payment Policy</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-medium">Full Payment Required</p>
+                      <p className="text-sm text-muted-foreground">100% advance to confirm booking</p>
+                    </div>
+                    <Switch
+                      checked={businessForm.full_payment_required}
+                      onCheckedChange={(v) => setBusinessForm((f) => f && { ...f, full_payment_required: v })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label>Minimum Advance (%)</Label>
+                    <Select
+                      value={String(businessForm.min_advance_percent)}
+                      onValueChange={(v) => setBusinessForm((f) => f && { ...f, min_advance_percent: Number(v) })}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="50">50%</SelectItem>
+                        <SelectItem value="75">75%</SelectItem>
+                        <SelectItem value="100">100%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Cancellation Policy</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <Textarea
+                    rows={4}
+                    value={businessForm.cancellation_policy}
+                    onChange={(e) => setBusinessForm((f) => f && { ...f, cancellation_policy: e.target.value })}
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Booking Rules</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Minimum advance booking</Label>
+                    <Select
+                      value={String(businessForm.min_advance_booking_hours)}
+                      onValueChange={(v) => setBusinessForm((f) => f && { ...f, min_advance_booking_hours: Number(v) })}
+                    >
+                      <SelectTrigger className="w-[110px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">1 hour</SelectItem>
+                        <SelectItem value="2">2 hours</SelectItem>
+                        <SelectItem value="4">4 hours</SelectItem>
+                        <SelectItem value="24">24 hours</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label>Maximum advance booking</Label>
+                    <Select
+                      value={String(businessForm.max_advance_booking_days)}
+                      onValueChange={(v) => setBusinessForm((f) => f && { ...f, max_advance_booking_days: Number(v) })}
+                    >
+                      <SelectTrigger className="w-[110px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="7">7 days</SelectItem>
+                        <SelectItem value="14">14 days</SelectItem>
+                        <SelectItem value="30">30 days</SelectItem>
+                        <SelectItem value="60">60 days</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-base">Tax Settings</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>GST Rate</Label>
+                    <Select
+                      value={String(businessForm.gst_rate)}
+                      onValueChange={(v) => setBusinessForm((f) => f && { ...f, gst_rate: Number(v) })}
+                    >
+                      <SelectTrigger className="w-[110px]"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="5">5%</SelectItem>
+                        <SelectItem value="12">12%</SelectItem>
+                        <SelectItem value="18">18%</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Prices inclusive of tax</span>
+                    <Switch
+                      checked={businessForm.prices_inclusive_tax}
+                      onCheckedChange={(v) => setBusinessForm((f) => f && { ...f, prices_inclusive_tax: v })}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+          <Button onClick={handleSaveBusiness} disabled={!businessDirty || savingBusiness}>
+            {savingBusiness && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Policies
+          </Button>
         </TabsContent>
 
-        {/* General Tab — not wired: no settings table in schema yet */}
+        {/* General Tab — real, backed by business_settings */}
         <TabsContent value="general" className="mt-4 space-y-4">
-          <NotWiredBanner />
           <h2 className="text-lg font-semibold">General Settings</h2>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Business Information</CardTitle>
-              <CardDescription>Would need a dedicated settings table to persist</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-2">
-                <Label>Business Name</Label>
-                <Input defaultValue="Friends Factory Cafe" disabled />
-              </div>
-              <div className="grid gap-2">
-                <Label>Support Email</Label>
-                <Input defaultValue="support@friendsfactory.cafe" disabled />
-              </div>
-            </CardContent>
-          </Card>
+          {!businessForm ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">Loading…</p>
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Business Information</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-2">
+                  <Label>Business Name</Label>
+                  <Input
+                    value={businessForm.business_name}
+                    onChange={(e) => setBusinessForm((f) => f && { ...f, business_name: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>GSTIN</Label>
+                  <Input
+                    value={businessForm.gstin || ""}
+                    onChange={(e) => setBusinessForm((f) => f && { ...f, gstin: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Support Email</Label>
+                  <Input
+                    value={businessForm.support_email || ""}
+                    onChange={(e) => setBusinessForm((f) => f && { ...f, support_email: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label>Support Phone</Label>
+                  <Input
+                    value={businessForm.support_phone || ""}
+                    onChange={(e) => setBusinessForm((f) => f && { ...f, support_phone: e.target.value })}
+                  />
+                </div>
+                <Button onClick={handleSaveBusiness} disabled={!businessDirty || savingBusiness}>
+                  {savingBusiness ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                  Save Changes
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>
