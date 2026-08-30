@@ -3,6 +3,8 @@ import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { CRMSidebar } from "@/components/crm-sidebar"
 import { DashboardHeader } from "@/components/dashboard-header"
+import { BrandProvider } from "@/hooks/use-brand"
+import { MobileBottomNav } from "@/components/mobile-bottom-nav"
 
 export default async function ProtectedLayout({
   children,
@@ -21,12 +23,15 @@ export default async function ProtectedLayout({
   }
 
   return (
-    <div className="flex min-h-screen bg-secondary/20">
-      <CRMSidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <DashboardHeader user={user} />
-        <main className="flex-1 overflow-y-auto p-4 md:p-8">{children}</main>
+    <BrandProvider>
+      <div className="flex min-h-screen bg-secondary/20">
+        <CRMSidebar />
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <DashboardHeader user={user} />
+          <main className="flex-1 overflow-y-auto p-4 pb-24 md:p-8">{children}</main>
+        </div>
+        <MobileBottomNav />
       </div>
-    </div>
+    </BrandProvider>
   )
 }
