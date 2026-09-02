@@ -1,5 +1,6 @@
 import { createClient } from "@supabase/supabase-js"
 import { NextRequest, NextResponse } from "next/server"
+import { isOriginAllowed, corsHeaders } from "@/lib/allowed-origins"
 
 // In-memory sliding-window rate limit, per IP. Resets when the serverless
 // instance recycles — not a substitute for a shared store (e.g. Upstash) at
@@ -22,55 +23,6 @@ function getClientIp(request: NextRequest): string {
   return forwarded?.split(",")[0]?.trim() || "unknown"
 }
 
-const ALLOWED_ORIGINS = [
-  // CRM itself
-  "https://crm.bookmymoment.in",
-
-  // ── FRIENDS FACTORY (Vadodara) ──────────────────────────────────────────
-  "https://friendsfactorycafe.com",
-  "https://www.friendsfactorycafe.com",
-  "https://candlelightdinnervadodara.com",
-  "https://www.candlelightdinnervadodara.com",
-  "https://anniversarydinnervadodara.com",
-  "https://www.anniversarydinnervadodara.com",
-  "https://birthdaysurprisevadodara.com",
-  "https://www.birthdaysurprisevadodara.com",
-  "https://surprisedatevadodara.com",
-  "https://www.surprisedatevadodara.com",
-  "https://rooftopdatevadodara.com",
-  "https://www.rooftopdatevadodara.com",
-
-  // ── HIVY (Surat) ────────────────────────────────────────────────────────
-  "https://hivy.co.in",
-  "https://www.hivy.co.in",
-  "https://candlelightdinnersurat.com",
-  "https://www.candlelightdinnersurat.com",
-  "https://anniversarydinnersurat.com",
-  "https://www.anniversarydinnersurat.com",
-  "https://birthdaysurprisesurat.com",
-  "https://www.birthdaysurprisesurat.com",
-  "https://surprisedatesurat.com",
-  "https://www.surprisedatesurat.com",
-
-  // ── Shared booking portal ───────────────────────────────────────────────
-  "https://bookmymoment.in",
-  "https://www.bookmymoment.in",
-
-  // ── Vercel preview domains ──────────────────────────────────────────────
-  "https://friends-factory-cafe.vercel.app",
-  "https://hivy.vercel.app",
-  "https://bookmymoment.vercel.app",
-]
-
-function corsHeaders(origin: string | null) {
-  const allowed = origin && ALLOWED_ORIGINS.some((o) => origin.startsWith(o))
-  return {
-    "Access-Control-Allow-Origin": allowed ? origin! : "null",
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-  }
-}
-
 export async function OPTIONS(request: NextRequest) {
   const origin = request.headers.get("origin")
   return new NextResponse(null, { status: 204, headers: corsHeaders(origin) })
@@ -81,9 +33,7 @@ export async function POST(request: NextRequest) {
 
   // In development, allow localhost
   const isDev = process.env.NODE_ENV === "development"
-  const isAllowed =
-    isDev ||
-    (origin && ALLOWED_ORIGINS.some((o) => origin.startsWith(o)))
+  const isAllowed = isDev || isOriginAllowed(origin)
 
   if (!isAllowed) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403, headers: corsHeaders(origin) })
