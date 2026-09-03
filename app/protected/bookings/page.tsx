@@ -57,6 +57,8 @@ import {
 } from "@/lib/actions/bookings"
 import { getPackages, type Package } from "@/lib/actions/packages"
 import { createInvoiceFromBooking } from "@/lib/actions/invoices"
+import { getTimeSlots, type TimeSlot } from "@/lib/actions/settings"
+import { formatTimeRange } from "@/lib/utils"
 import { useBrand } from "@/hooks/use-brand"
 import { toast } from "sonner"
 import { useRouter, useSearchParams } from "next/navigation"
@@ -107,6 +109,7 @@ function BookingsPageInner() {
   const { activeCity, isReady } = useBrand()
   const [bookings, setBookings] = useState<Booking[]>([])
   const [packages, setPackages] = useState<Package[]>([])
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [stats, setStats] = useState({ todayCount: 0, todayRevenue: 0, monthRevenue: 0, confirmedToday: 0 })
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -154,14 +157,16 @@ function BookingsPageInner() {
     setLoading(true)
     try {
       const cityFilter = outletFilter === "all" ? undefined : outletFilter
-      const [bData, bStats, pkgs] = await Promise.all([
+      const [bData, bStats, pkgs, slots] = await Promise.all([
         getBookings({ outlet: outletFilter, status: statusFilter }),
         getBookingStats(cityFilter),
         getPackages(),
+        getTimeSlots(),
       ])
       setBookings(bData)
       setStats(bStats)
       setPackages(pkgs)
+      setTimeSlots(slots)
     } catch (e) {
       toast.error("Failed to load bookings")
     } finally {
@@ -349,11 +354,10 @@ function BookingsPageInner() {
                     <Select value={form.time_slot} onValueChange={(v) => setForm((f) => ({ ...f, time_slot: v }))}>
                       <SelectTrigger><SelectValue placeholder="Select slot" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="4:00 PM - 6:00 PM">4:00 PM - 6:00 PM</SelectItem>
-                        <SelectItem value="5:30 PM - 7:30 PM">5:30 PM - 7:30 PM</SelectItem>
-                        <SelectItem value="7:00 PM - 9:00 PM">7:00 PM - 9:00 PM</SelectItem>
-                        <SelectItem value="8:30 PM - 10:30 PM">8:30 PM - 10:30 PM</SelectItem>
-                        <SelectItem value="10:00 PM - 12:00 AM">10:00 PM - 12:00 AM</SelectItem>
+                        {timeSlots.filter((s) => s.is_active).map((s) => {
+                          const label = formatTimeRange(s.start_time, s.end_time)
+                          return <SelectItem key={s.id} value={label}>{s.slot_name} · {label}</SelectItem>
+                        })}
                       </SelectContent>
                     </Select>
                   </div>

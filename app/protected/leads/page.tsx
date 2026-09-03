@@ -33,6 +33,8 @@ import {
   convertLeadToBooking, type Lead,
 } from "@/lib/actions/leads"
 import { getPackages, type Package } from "@/lib/actions/packages"
+import { getTimeSlots, type TimeSlot } from "@/lib/actions/settings"
+import { formatTimeRange } from "@/lib/utils"
 import { useBrand } from "@/hooks/use-brand"
 import { toast } from "sonner"
 import Link from "next/link"
@@ -62,19 +64,6 @@ const sourceColors: Record<string, string> = {
   website:   "bg-violet-50 text-violet-700 border-violet-200",
 }
 
-const TIME_SLOTS = [
-  "11:00 AM – 1:00 PM",
-  "12:00 PM – 2:00 PM",
-  "1:00 PM – 3:00 PM",
-  "3:00 PM – 5:00 PM",
-  "5:00 PM – 7:00 PM",
-  "6:00 PM – 8:00 PM",
-  "7:00 PM – 9:00 PM",
-  "8:00 PM – 10:00 PM",
-  "9:00 PM – 11:00 PM",
-  "10:00 PM – 12:00 AM",
-]
-
 const PIPELINE_STAGES = ["new", "contacted", "qualified", "converted", "lost"]
 
 const defaultAddForm = {
@@ -89,11 +78,13 @@ const defaultAddForm = {
 function ConvertDialog({
   lead,
   packages,
+  timeSlots,
   onSuccess,
   onClose,
 }: {
   lead: Lead
   packages: Package[]
+  timeSlots: TimeSlot[]
   onSuccess: () => void
   onClose: () => void
 }) {
@@ -240,13 +231,16 @@ function ConvertDialog({
             <Select value={form.time_slot} onValueChange={(v) => set("time_slot", v)}>
               <SelectTrigger><SelectValue placeholder="Select time slot" /></SelectTrigger>
               <SelectContent>
-                {TIME_SLOTS.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    <span className="flex items-center gap-2">
-                      <Clock className="w-3 h-3 text-muted-foreground" /> {s}
-                    </span>
-                  </SelectItem>
-                ))}
+                {timeSlots.filter((s) => s.is_active).map((s) => {
+                  const label = formatTimeRange(s.start_time, s.end_time)
+                  return (
+                    <SelectItem key={s.id} value={label}>
+                      <span className="flex items-center gap-2">
+                        <Clock className="w-3 h-3 text-muted-foreground" /> {s.slot_name} · {label}
+                      </span>
+                    </SelectItem>
+                  )
+                })}
               </SelectContent>
             </Select>
           </div>
@@ -334,6 +328,7 @@ export default function LeadsPage() {
   const { activeCity, isReady } = useBrand()
   const [leads, setLeads] = useState<Lead[]>([])
   const [packages, setPackages] = useState<Package[]>([])
+  const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([])
   const [stats, setStats] = useState({ total: 0, new: 0, contacted: 0, qualified: 0, converted: 0, lost: 0 })
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
@@ -358,14 +353,16 @@ export default function LeadsPage() {
     setLoading(true)
     try {
       const cityFilter = activeCity === "all" ? undefined : activeCity
-      const [lData, lStats, pkgs] = await Promise.all([
+      const [lData, lStats, pkgs, slots] = await Promise.all([
         getLeads({ status: statusFilter, outlet: cityFilter }),
         getLeadStats(cityFilter),
         getPackages(),
+        getTimeSlots(),
       ])
       setLeads(lData)
       setStats(lStats)
       setPackages(pkgs)
+      setTimeSlots(slots)
     } catch {
       toast.error("Failed to load leads")
     } finally {
@@ -445,6 +442,7 @@ export default function LeadsPage() {
             <ConvertDialog
               lead={convertingLead}
               packages={packages}
+              timeSlots={timeSlots}
               onSuccess={() => { load() }}
               onClose={() => setConvertingLead(null)}
             />

@@ -31,18 +31,12 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { getBookingsByWeek, type Booking } from "@/lib/actions/bookings"
+import { getTimeSlots } from "@/lib/actions/settings"
+import { formatTimeRange } from "@/lib/utils"
 import { useBrand } from "@/hooks/use-brand"
 import { toast } from "sonner"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-
-const TIME_SLOTS = [
-  "4:00 PM - 6:00 PM",
-  "5:30 PM - 7:30 PM",
-  "7:00 PM - 9:00 PM",
-  "8:30 PM - 10:30 PM",
-  "10:00 PM - 12:00 AM",
-]
 
 const statusColors: Record<string, string> = {
   confirmed:  "bg-emerald-50 border-emerald-300 hover:bg-emerald-100",
@@ -93,6 +87,13 @@ export default function CalendarPage() {
   const [bookings, setBookings] = useState<Booking[]>([])
   const [loading, setLoading]   = useState(true)
   const [selected, setSelected] = useState<Booking | null>(null)
+  const [timeSlots, setTimeSlots] = useState<string[]>([])
+
+  useEffect(() => {
+    getTimeSlots()
+      .then((slots) => setTimeSlots(slots.filter((s) => s.is_active).map((s) => formatTimeRange(s.start_time, s.end_time))))
+      .catch(() => {})
+  }, [])
 
   const weekDates = getWeekDates(anchor)
   const today     = formatDateKey(new Date())
@@ -129,7 +130,7 @@ export default function CalendarPage() {
 
   // All unique slots that appear (merge with defaults)
   const allSlots = Array.from(
-    new Set([...TIME_SLOTS, ...bookings.map(b => b.time_slot).filter(Boolean)])
+    new Set([...timeSlots, ...bookings.map(b => b.time_slot).filter(Boolean)])
   )
 
   const navigate = (dir: number) => {

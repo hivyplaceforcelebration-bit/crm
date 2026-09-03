@@ -153,6 +153,10 @@ export async function convertLeadToBooking(
 
   if (error) throw error
 
+  if (customer?.id) {
+    await supabase.rpc("update_customer_stats", { p_customer_id: customer.id })
+  }
+
   // Mark lead converted
   await supabase
     .from("leads")
