@@ -628,7 +628,8 @@ function SettingsPageInner() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-3">
-                Reference only — these permissions aren&apos;t enforced in the app yet; every logged-in user currently has the same access regardless of role.
+                Reference only — these page/feature permissions aren&apos;t enforced yet (every logged-in user can reach every page regardless of role).
+                Outlet scoping is enforced though: a user with Outlet Access set to Surat or Vadodara only sees that outlet&apos;s bookings, leads, customers, invoices and packages — set on the Users tab above.
               </p>
             </CardContent>
           </Card>
