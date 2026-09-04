@@ -67,10 +67,10 @@ const sourceColors: Record<string, string> = {
 const PIPELINE_STAGES = ["new", "contacted", "qualified", "converted", "lost"]
 
 const defaultAddForm = {
-  name: "", phone: "", whatsapp_number: "", email: "",
-  occasion_type: "candlelight", preferred_date: "", outlet: "",
+  name: "", phone: "", email: "",
+  occasion_type: "candlelight", preferred_date: "", preferred_time: "", package_name: "", outlet: "",
   lead_source: "instagram", enquiry_channel: "dm",
-  budget_range: "", notes: "",
+  notes: "",
 }
 
 // ─── Convert Dialog ─────────────────────────────────────────────────────────
@@ -389,14 +389,14 @@ export default function LeadsPage() {
       await createLead({
         name: addForm.name,
         phone: addForm.phone,
-        whatsapp_number: addForm.whatsapp_number || undefined,
         email: addForm.email || undefined,
         occasion_type: addForm.occasion_type,
         preferred_date: addForm.preferred_date || undefined,
+        preferred_time: addForm.preferred_time || undefined,
+        package_name: addForm.package_name || undefined,
         outlet: addForm.outlet || undefined,
         lead_source: addForm.lead_source,
         enquiry_channel: addForm.enquiry_channel,
-        budget_range: addForm.budget_range || undefined,
         notes: addForm.notes || undefined,
       })
       toast.success("Lead added")
@@ -482,12 +482,19 @@ export default function LeadsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <Label>WhatsApp</Label>
-                    <Input value={addForm.whatsapp_number} onChange={(e) => setAddForm((f) => ({ ...f, whatsapp_number: e.target.value }))} placeholder="Same as phone" />
-                  </div>
-                  <div className="space-y-1.5">
                     <Label>Preferred Date</Label>
                     <Input type="date" value={addForm.preferred_date} onChange={(e) => setAddForm((f) => ({ ...f, preferred_date: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Preferred Time</Label>
+                    <Select value={addForm.preferred_time} onValueChange={(v) => setAddForm((f) => ({ ...f, preferred_time: v }))}>
+                      <SelectTrigger><SelectValue placeholder="Any" /></SelectTrigger>
+                      <SelectContent>
+                        {timeSlots.map((slot) => (
+                          <SelectItem key={slot.id} value={slot.slot_name}>{slot.slot_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
@@ -518,6 +525,17 @@ export default function LeadsPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
+                    <Label>Package</Label>
+                    <Select value={addForm.package_name} onValueChange={(v) => setAddForm((f) => ({ ...f, package_name: v }))}>
+                      <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectContent>
+                        {packages.map((pkg) => (
+                          <SelectItem key={pkg.id} value={pkg.name}>{pkg.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
                     <Label>Source</Label>
                     <Select value={addForm.lead_source} onValueChange={(v) => setAddForm((f) => ({ ...f, lead_source: v }))}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
@@ -531,10 +549,6 @@ export default function LeadsPage() {
                         <SelectItem value="website">Website</SelectItem>
                       </SelectContent>
                     </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Budget</Label>
-                    <Input value={addForm.budget_range} onChange={(e) => setAddForm((f) => ({ ...f, budget_range: e.target.value }))} placeholder="e.g. ₹3000–5000" />
                   </div>
                 </div>
                 <div className="space-y-1.5">

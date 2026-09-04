@@ -12,6 +12,7 @@ export type Lead = {
   occasion_type: string
   preferred_date: string | null
   preferred_time: string | null
+  package_name: string | null
   num_people: number
   outlet: string | null
   status: string
@@ -58,6 +59,8 @@ export async function createLead(lead: {
   email?: string
   occasion_type: string
   preferred_date?: string
+  preferred_time?: string
+  package_name?: string
   outlet?: string
   status?: string
   lead_source: string
