@@ -92,3 +92,35 @@ export async function getWhatsAppHubStatus(): Promise<{ configured: boolean; con
     return { configured: true, connected: false }
   }
 }
+
+// Starts (or restarts) the hub's WhatsApp session so a QR code becomes
+// available, then fetches it. Called from the "Connect WhatsApp" button on
+// Settings so pairing never again requires calling the hub's API by hand.
+export async function startWhatsAppPairing(): Promise<{ ok: boolean; error?: string }> {
+  if (!HUB_URL || !HUB_API_KEY) return { ok: false, error: "WhatsApp hub not configured" }
+  try {
+    const res = await fetch(`${HUB_URL}/internal/session`, {
+      method: "POST",
+      headers: { "x-api-key": HUB_API_KEY },
+    })
+    if (!res.ok) return { ok: false, error: `Hub returned ${res.status}` }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to reach hub" }
+  }
+}
+
+export async function getWhatsAppQr(): Promise<{ status: string; qr: string | null; phoneNumber?: string | null }> {
+  if (!HUB_URL || !HUB_API_KEY) return { status: "NOT_CONFIGURED", qr: null }
+  try {
+    const res = await fetch(`${HUB_URL}/internal/session/qr`, {
+      headers: { "x-api-key": HUB_API_KEY },
+      cache: "no-store",
+    })
+    if (!res.ok) return { status: "ERROR", qr: null }
+    const data = await res.json()
+    return { status: data.status, qr: data.qr ?? null, phoneNumber: data.phoneNumber ?? null }
+  } catch {
+    return { status: "ERROR", qr: null }
+  }
+}

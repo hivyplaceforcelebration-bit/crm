@@ -26,7 +26,7 @@ import {
   type Outlet, type TimeSlot, type UserRole, type BusinessSettings,
 } from "@/lib/actions/settings"
 import { getTemplates, saveTemplate, deleteTemplate, type MessageTemplate } from "@/lib/actions/marketing"
-import { getWhatsAppHubStatus } from "@/lib/actions/whatsapp"
+import { getWhatsAppHubStatus, startWhatsAppPairing, getWhatsAppQr } from "@/lib/actions/whatsapp"
 
 const defaultOutletForm = { name: "", city: "", address: "", phone: "", email: "", capacity: 8 }
 const defaultSlotForm = { slot_name: "", start_time: "16:00", end_time: "17:30", capacity: 1 }
@@ -58,6 +58,9 @@ function SettingsPageInner() {
   const [templateForm, setTemplateForm] = useState(defaultTemplateForm)
   const [savingTemplate, setSavingTemplate] = useState(false)
   const [waStatus, setWaStatus] = useState<{ configured: boolean; connected?: boolean; phoneNumber?: string | null } | null>(null)
+  const [showQrDialog, setShowQrDialog] = useState(false)
+  const [qrImage, setQrImage] = useState<string | null>(null)
+  const [qrConnecting, setQrConnecting] = useState(false)
 
   // Users & roles
   const [users, setUsers] = useState<UserRole[]>([])
@@ -163,6 +166,35 @@ function SettingsPageInner() {
     } catch {
       toast.error("Failed to remove time slot")
     }
+  }
+
+  // ── WhatsApp pairing ───────────────────────────────────────────────────────
+  const handleConnectWhatsApp = async () => {
+    setShowQrDialog(true)
+    setQrConnecting(true)
+    setQrImage(null)
+
+    const start = await startWhatsAppPairing()
+    if (!start.ok) {
+      toast.error(start.error || "Failed to start pairing")
+      setQrConnecting(false)
+      return
+    }
+
+    for (let i = 0; i < 40; i++) {
+      await new Promise((r) => setTimeout(r, 3000))
+      const res = await getWhatsAppQr()
+      if (res.status === "CONNECTED") {
+        toast.success(`WhatsApp connected: ${res.phoneNumber || ""}`)
+        setShowQrDialog(false)
+        setQrConnecting(false)
+        setWaStatus(await getWhatsAppHubStatus())
+        return
+      }
+      if (res.qr) setQrImage(res.qr)
+    }
+    setQrConnecting(false)
+    toast.error("QR pairing timed out — try again")
   }
 
   // ── Templates ───────────────────────────────────────────────────────────────
@@ -658,13 +690,41 @@ function SettingsPageInner() {
                   <span className="text-muted-foreground">{waStatus.phoneNumber || "Automation number"} is paired and sending</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 text-sm">
-                  <Badge variant="secondary">Not paired</Badge>
-                  <span className="text-muted-foreground">Hub is reachable, but no WhatsApp number is scanned in yet.</span>
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="secondary">Not paired</Badge>
+                    <span className="text-muted-foreground">Hub is reachable, but no WhatsApp number is scanned in yet.</span>
+                  </div>
+                  <Button size="sm" onClick={handleConnectWhatsApp}>Connect WhatsApp</Button>
                 </div>
               )}
             </CardContent>
           </Card>
+
+          <Dialog open={showQrDialog} onOpenChange={(o) => { if (!o) setShowQrDialog(false) }}>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle>Scan to connect WhatsApp</DialogTitle>
+                <DialogDescription>Open WhatsApp → Settings → Linked Devices → Link a Device</DialogDescription>
+              </DialogHeader>
+              <div className="flex flex-col items-center justify-center py-4 min-h-[280px]">
+                {qrImage ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={qrImage} alt="WhatsApp QR code" className="w-64 h-64" />
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin" />
+                    <span className="text-sm">Waiting for QR code…</span>
+                  </div>
+                )}
+              </div>
+              {qrConnecting && qrImage && (
+                <p className="text-xs text-center text-muted-foreground">
+                  Refreshes automatically if it expires — keep this open until connected.
+                </p>
+              )}
+            </DialogContent>
+          </Dialog>
 
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">Message Templates</h2>
