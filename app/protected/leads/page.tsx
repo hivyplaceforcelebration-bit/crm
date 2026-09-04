@@ -149,9 +149,9 @@ function ConvertDialog({
           <CheckCircle2 className="w-8 h-8 text-emerald-600" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold">Booking Created!</h3>
+          <h3 className="text-lg font-semibold">Booking Created &amp; Marked Paid!</h3>
           <p className="text-muted-foreground text-sm mt-1">
-            {lead.name}'s lead has been converted successfully.
+            {lead.name}&apos;s lead has been converted — payment recorded in full, and an invoice has been sent to them on WhatsApp.
           </p>
           {done.booking_number && (
             <p className="text-xs text-muted-foreground mt-1 font-mono">#{done.booking_number}</p>
@@ -180,6 +180,7 @@ function ConvertDialog({
         </DialogTitle>
         <DialogDescription>
           Create a confirmed booking from this lead. Details are pre-filled from the enquiry.
+          Converting marks the full amount as <strong>paid</strong> and sends the customer an invoice on WhatsApp — only convert once payment is actually in hand.
         </DialogDescription>
       </DialogHeader>
 
@@ -314,7 +315,7 @@ function ConvertDialog({
           {saving ? (
             <><RefreshCw className="w-4 h-4 mr-2 animate-spin" /> Creating…</>
           ) : (
-            <><Zap className="w-4 h-4 mr-2" /> Create Booking</>
+            <><Zap className="w-4 h-4 mr-2" /> Convert &amp; Mark Paid</>
           )}
         </Button>
       </DialogFooter>

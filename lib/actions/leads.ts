@@ -2,7 +2,8 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { sendBookingConfirmation, sendTeamBookingAlert } from "@/lib/actions/whatsapp"
+import { sendBookingConfirmation, sendTeamBookingAlert, sendInvoiceMessage } from "@/lib/actions/whatsapp"
+import { createInvoiceFromBooking, getInvoice } from "@/lib/actions/invoices"
 
 export type Lead = {
   id: string
@@ -140,7 +141,9 @@ export async function convertLeadToBooking(
     .select("id")
     .single()
 
-  // Create booking
+  // Create booking - converting a lead means payment was collected (that's
+  // what "converted" means in this workflow, unlike a fresh booking which
+  // starts pending), so it's marked paid in full immediately.
   const { data: newBooking, error } = await supabase
     .from("bookings")
     .insert({
@@ -148,9 +151,9 @@ export async function convertLeadToBooking(
       booking_number: "",
       customer_id: customer?.id || null,
       status: "confirmed",
-      payment_status: "pending",
+      payment_status: "paid",
       add_ons_amount: 0,
-      amount_paid: 0,
+      amount_paid: booking.total_amount,
     })
     .select()
     .single()
@@ -180,8 +183,19 @@ export async function convertLeadToBooking(
   sendBookingConfirmation(waPayload).catch((err) => console.error("sendBookingConfirmation failed", err))
   sendTeamBookingAlert(waPayload).catch((err) => console.error("sendTeamBookingAlert failed", err))
 
+  // Converting = paid in full, so an invoice exists immediately - generate
+  // it and send it to the customer. Best-effort, same as the WhatsApp
+  // sends above: never let this fail the conversion itself.
+  createInvoiceFromBooking(newBooking.id)
+    .then(async (invoiceId) => {
+      const invoice = await getInvoice(invoiceId)
+      await sendInvoiceMessage(invoice)
+    })
+    .catch((err) => console.error("invoice generation/send failed", err))
+
   revalidatePath("/protected/leads")
   revalidatePath("/protected/bookings")
+  revalidatePath("/protected/invoices")
   revalidatePath("/protected/dashboard")
   return newBooking
 }

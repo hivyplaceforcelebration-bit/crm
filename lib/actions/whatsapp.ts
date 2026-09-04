@@ -52,6 +52,35 @@ export async function sendBookingConfirmation(booking: {
   return sendWhatsAppText(booking.customer_phone, text)
 }
 
+export async function sendInvoiceMessage(invoice: {
+  invoice_number: string
+  customer_name: string
+  customer_phone: string
+  outlet: string | null
+  subtotal: number
+  discount: number
+  tax: number
+  total_amount: number
+  amount_paid: number
+  payment_status: string
+}) {
+  const outlet = (invoice.outlet && OUTLET_INFO[invoice.outlet]) || { name: invoice.outlet || "", address: "", teamPhone: "" }
+  const lines = [
+    `🧾 Invoice *${invoice.invoice_number}* from *${outlet.name}*`,
+    ``,
+    `Subtotal: ₹${invoice.subtotal.toLocaleString()}`,
+  ]
+  if (invoice.discount > 0) lines.push(`Discount: -₹${invoice.discount.toLocaleString()}`)
+  if (invoice.tax > 0) lines.push(`Tax: ₹${invoice.tax.toLocaleString()}`)
+  lines.push(
+    `*Total: ₹${invoice.total_amount.toLocaleString()}*`,
+    `Paid: ₹${invoice.amount_paid.toLocaleString()} (${invoice.payment_status})`,
+    ``,
+    `Thank you for choosing us! 💕`
+  )
+  return sendWhatsAppText(invoice.customer_phone, lines.join("\n"))
+}
+
 // Alerts the outlet's own team number whenever a booking is confirmed
 // (whether from a fresh booking or a converted lead), so staff know a new
 // booking landed without having to watch the CRM.
