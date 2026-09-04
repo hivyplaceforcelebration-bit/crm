@@ -66,6 +66,8 @@ const sourceColors: Record<string, string> = {
 
 const PIPELINE_STAGES = ["new", "contacted", "qualified", "converted", "lost"]
 
+const DEFAULT_BOOKING_REMINDER = "🕯️ Reminder: Please call us 15 minutes before your booking time for the candle-light setup/glow."
+
 const defaultAddForm = {
   name: "", phone: "", email: "",
   occasion_type: "candlelight", preferred_date: "", preferred_time: "", package_name: "", outlet: "",
@@ -123,7 +125,7 @@ function ConvertDialog({
     package_id: matchedPackage?.id || "",
     num_people: "2",
     base_amount: matchedPackage ? String(matchedPackage.base_price) : "",
-    notes: "",
+    notes: DEFAULT_BOOKING_REMINDER,
   })
 
   const selectedPkg = packages.find((p) => p.id === form.package_id)
@@ -320,7 +322,7 @@ function ConvertDialog({
         </div>
 
         <div className="space-y-1.5">
-          <Label>Notes</Label>
+          <Label>Reminder</Label>
           <Textarea
             rows={2}
             placeholder="Special requests, décor preferences..."
