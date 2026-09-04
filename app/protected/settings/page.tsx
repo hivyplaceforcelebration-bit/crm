@@ -26,6 +26,7 @@ import {
   type Outlet, type TimeSlot, type UserRole, type BusinessSettings,
 } from "@/lib/actions/settings"
 import { getTemplates, saveTemplate, deleteTemplate, type MessageTemplate } from "@/lib/actions/marketing"
+import { getWhatsAppHubStatus } from "@/lib/actions/whatsapp"
 
 const defaultOutletForm = { name: "", city: "", address: "", phone: "", email: "", capacity: 8 }
 const defaultSlotForm = { slot_name: "", start_time: "16:00", end_time: "17:30", capacity: 1 }
@@ -56,6 +57,7 @@ function SettingsPageInner() {
   const [showAddTemplate, setShowAddTemplate] = useState(false)
   const [templateForm, setTemplateForm] = useState(defaultTemplateForm)
   const [savingTemplate, setSavingTemplate] = useState(false)
+  const [waStatus, setWaStatus] = useState<{ configured: boolean; connected?: boolean; phoneNumber?: string | null } | null>(null)
 
   // Users & roles
   const [users, setUsers] = useState<UserRole[]>([])
@@ -73,8 +75,8 @@ function SettingsPageInner() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [o, s, t, u, b] = await Promise.all([
-        getOutlets(), getTimeSlots(), getTemplates(), getUserRoles(), getBusinessSettings(),
+      const [o, s, t, u, b, wa] = await Promise.all([
+        getOutlets(), getTimeSlots(), getTemplates(), getUserRoles(), getBusinessSettings(), getWhatsAppHubStatus(),
       ])
       setOutlets(o)
       setSlots(s)
@@ -82,6 +84,7 @@ function SettingsPageInner() {
       setUsers(u)
       setBusiness(b)
       setBusinessForm(b)
+      setWaStatus(wa)
     } catch {
       toast.error("Failed to load settings")
     } finally {
@@ -636,6 +639,33 @@ function SettingsPageInner() {
 
         {/* Notifications Tab — templates are real (shared with Marketing), integrations are not wired */}
         <TabsContent value="notifications" className="mt-4 space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">WhatsApp Automation</CardTitle>
+              <CardDescription>
+                Sends booking confirmations, 2-day-before reminders and review requests automatically.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {!waStatus?.configured ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Badge variant="secondary">Not configured</Badge>
+                  WHATSAPP_HUB_URL / WHATSAPP_HUB_API_KEY aren&apos;t set — messages are silently skipped.
+                </div>
+              ) : waStatus.connected ? (
+                <div className="flex items-center gap-2 text-sm">
+                  <Badge className="bg-emerald-500">Connected</Badge>
+                  <span className="text-muted-foreground">{waStatus.phoneNumber || "Automation number"} is paired and sending</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 text-sm">
+                  <Badge variant="secondary">Not paired</Badge>
+                  <span className="text-muted-foreground">Hub is reachable, but no WhatsApp number is scanned in yet.</span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="flex justify-between items-center">
             <h2 className="text-lg font-semibold">Message Templates</h2>
             <Dialog open={showAddTemplate} onOpenChange={setShowAddTemplate}>
