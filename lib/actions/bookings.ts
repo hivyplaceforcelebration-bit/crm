@@ -2,7 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
-import { sendBookingConfirmation, sendReviewRequest } from "@/lib/actions/whatsapp"
+import { sendBookingConfirmation, sendReviewRequest, sendTeamBookingAlert } from "@/lib/actions/whatsapp"
 
 export type Booking = {
   id: string
@@ -144,7 +144,7 @@ export async function createBooking(booking: {
   }
 
   // Best-effort - a failed WhatsApp send must never fail booking creation.
-  sendBookingConfirmation({
+  const waPayload = {
     customer_name: booking.customer_name,
     customer_phone: booking.customer_phone,
     outlet: booking.outlet,
@@ -152,7 +152,9 @@ export async function createBooking(booking: {
     time_slot: booking.time_slot,
     package_name: booking.package_name,
     total_amount: booking.total_amount,
-  }).catch((err) => console.error("sendBookingConfirmation failed", err))
+  }
+  sendBookingConfirmation(waPayload).catch((err) => console.error("sendBookingConfirmation failed", err))
+  sendTeamBookingAlert(waPayload).catch((err) => console.error("sendTeamBookingAlert failed", err))
 
   revalidatePath("/protected/bookings")
   revalidatePath("/protected/dashboard")

@@ -10,9 +10,9 @@
 const HUB_URL = process.env.WHATSAPP_HUB_URL
 const HUB_API_KEY = process.env.WHATSAPP_HUB_API_KEY
 
-const OUTLET_INFO: Record<string, { name: string; address: string }> = {
-  Surat: { name: "Hivy — Place for Celebrations", address: "Adajan, Pal Gam, Surat" },
-  Vadodara: { name: "Friends Factory Cafe", address: "Sevasi - Canal Rd, Gotri, Vadodara" },
+const OUTLET_INFO: Record<string, { name: string; address: string; teamPhone: string }> = {
+  Surat: { name: "Hivy — Place for Celebrations", address: "Adajan, Pal Gam, Surat", teamPhone: "919727027278" },
+  Vadodara: { name: "Friends Factory Cafe", address: "Sevasi - Canal Rd, Gotri, Vadodara", teamPhone: "917487888730" },
 }
 
 async function sendWhatsAppText(toPhone: string, text: string): Promise<boolean> {
@@ -46,10 +46,29 @@ export async function sendBookingConfirmation(booking: {
   package_name?: string | null
   total_amount: number
 }) {
-  const outlet = OUTLET_INFO[booking.outlet] || { name: booking.outlet, address: "" }
+  const outlet = OUTLET_INFO[booking.outlet] || { name: booking.outlet, address: "", teamPhone: "" }
   const date = new Date(booking.booking_date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
   const text = `Hi ${booking.customer_name}! 🎉 Your booking at *${outlet.name}* is confirmed.\n\n📅 ${date}, ${booking.time_slot}\n${booking.package_name ? `📦 ${booking.package_name}\n` : ""}💰 ₹${booking.total_amount.toLocaleString()}\n📍 ${outlet.address}\n\nWe can't wait to celebrate with you! Reply here if you need to change anything.`
   return sendWhatsAppText(booking.customer_phone, text)
+}
+
+// Alerts the outlet's own team number whenever a booking is confirmed
+// (whether from a fresh booking or a converted lead), so staff know a new
+// booking landed without having to watch the CRM.
+export async function sendTeamBookingAlert(booking: {
+  customer_name: string
+  customer_phone: string
+  outlet: string
+  booking_date: string
+  time_slot: string
+  package_name?: string | null
+  total_amount: number
+}) {
+  const outlet = OUTLET_INFO[booking.outlet] || { name: booking.outlet, address: "", teamPhone: "" }
+  if (!outlet.teamPhone) return false
+  const date = new Date(booking.booking_date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+  const text = `🔔 New booking at *${outlet.name}*\n\n👤 ${booking.customer_name} (${booking.customer_phone})\n📅 ${date}, ${booking.time_slot}\n${booking.package_name ? `📦 ${booking.package_name}\n` : ""}💰 ₹${booking.total_amount.toLocaleString()}`
+  return sendWhatsAppText(outlet.teamPhone, text)
 }
 
 export async function sendBookingReminder(booking: {

@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { sendBookingConfirmation, sendTeamBookingAlert } from "@/lib/actions/whatsapp"
 
 export type Lead = {
   id: string
@@ -165,6 +166,19 @@ export async function convertLeadToBooking(
     .from("leads")
     .update({ status: "converted", converted_booking_id: newBooking.id })
     .eq("id", leadId)
+
+  // Best-effort - a failed WhatsApp send must never fail the conversion.
+  const waPayload = {
+    customer_name: booking.customer_name,
+    customer_phone: booking.customer_phone,
+    outlet: booking.outlet,
+    booking_date: booking.booking_date,
+    time_slot: booking.time_slot,
+    package_name: booking.package_name,
+    total_amount: booking.total_amount,
+  }
+  sendBookingConfirmation(waPayload).catch((err) => console.error("sendBookingConfirmation failed", err))
+  sendTeamBookingAlert(waPayload).catch((err) => console.error("sendTeamBookingAlert failed", err))
 
   revalidatePath("/protected/leads")
   revalidatePath("/protected/bookings")
