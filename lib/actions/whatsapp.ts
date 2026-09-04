@@ -7,8 +7,32 @@
 // point with it. Every call is best-effort: booking creation, status
 // changes etc. must never fail just because a WhatsApp send failed.
 
+import { createClient } from "@/lib/supabase/server"
+
 const HUB_URL = process.env.WHATSAPP_HUB_URL
 const HUB_API_KEY = process.env.WHATSAPP_HUB_API_KEY
+
+// The customer/team confirmation messages are stored as real, editable rows
+// in message_templates (see migration 012) instead of hardcoded text, so
+// Settings > Templates can change what actually gets sent without a
+// redeploy. Falls back to a hardcoded body if the row is ever missing.
+async function getTemplateBody(name: string, fallback: string): Promise<string> {
+  try {
+    const supabase = await createClient()
+    const { data } = await supabase
+      .from("message_templates")
+      .select("body")
+      .eq("name", name)
+      .maybeSingle()
+    return data?.body || fallback
+  } catch {
+    return fallback
+  }
+}
+
+function fillTemplate(template: string, vars: Record<string, string>): string {
+  return template.replace(/\{(\w+)\}/g, (match, key) => vars[key] ?? match)
+}
 
 const OUTLET_INFO: Record<string, { name: string; address: string; teamPhone: string }> = {
   Surat: { name: "Hivy — Place for Celebrations", address: "Adajan, Pal Gam, Surat", teamPhone: "919727027278" },
@@ -37,6 +61,48 @@ async function sendWhatsAppText(toPhone: string, text: string): Promise<boolean>
   }
 }
 
+const CUSTOMER_CONFIRMATION_FALLBACK = `🎉 BOOKING CONFIRMED — {outlet_name}
+
+Hi {customer_name} 👋
+
+Your celebration at {outlet_name}, {outlet_city} is confirmed! ✨
+
+👤 Name: {customer_name}
+📞 Contact: {phone}
+📅 Date: {date}
+⏰ Preferred Time: {time}
+🎁 Occasion: {occasion}
+📦 Package: {package_name}
+
+🕯️ Reminder: Please call us 15 minutes before your booking time for the candle-light setup/glow.
+
+✨ We look forward to making your special moment memorable at {outlet_name}!`
+
+function bookingVars(booking: {
+  customer_name: string
+  customer_phone: string
+  outlet: string
+  booking_date: string
+  time_slot: string
+  package_name?: string | null
+  occasion?: string | null
+}) {
+  const outlet = OUTLET_INFO[booking.outlet] || { name: booking.outlet, address: "", teamPhone: "" }
+  const date = new Date(booking.booking_date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+  return {
+    outlet_name: outlet.name,
+    outlet_city: booking.outlet,
+    outlet_address: outlet.address,
+    outlet_phone: outlet.teamPhone,
+    customer_name: booking.customer_name,
+    phone: booking.customer_phone,
+    date,
+    time: booking.time_slot,
+    occasion: booking.occasion || "—",
+    package_name: booking.package_name || "—",
+  }
+}
+
 export async function sendBookingConfirmation(booking: {
   customer_name: string
   customer_phone: string
@@ -44,11 +110,11 @@ export async function sendBookingConfirmation(booking: {
   booking_date: string
   time_slot: string
   package_name?: string | null
+  occasion?: string | null
   total_amount: number
 }) {
-  const outlet = OUTLET_INFO[booking.outlet] || { name: booking.outlet, address: "", teamPhone: "" }
-  const date = new Date(booking.booking_date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
-  const text = `Hi ${booking.customer_name}! 🎉 Your booking at *${outlet.name}* is confirmed.\n\n📅 ${date}, ${booking.time_slot}\n${booking.package_name ? `📦 ${booking.package_name}\n` : ""}💰 ₹${booking.total_amount.toLocaleString()}\n📍 ${outlet.address}\n\nWe can't wait to celebrate with you! Reply here if you need to change anything.`
+  const template = await getTemplateBody("Booking Confirmation - Customer", CUSTOMER_CONFIRMATION_FALLBACK)
+  const text = fillTemplate(template, bookingVars(booking))
   return sendWhatsAppText(booking.customer_phone, text)
 }
 
@@ -81,6 +147,27 @@ export async function sendInvoiceMessage(invoice: {
   return sendWhatsAppText(invoice.customer_phone, lines.join("\n"))
 }
 
+const TEAM_ALERT_FALLBACK = `🔔 NEW BOOKING CONFIRMED
+
+A new customer booking has been received.
+
+👤 Customer: {customer_name}
+📞 Phone: {phone}
+📍 City: {outlet_city}
+📦 Package: {package_name}
+🎁 Occasion: {occasion}
+📅 Date: {date}
+⏰ Time: {time}
+
+✅ Booking Status: CONFIRMED
+
+Please check the booking details and make the necessary arrangements for the customer's celebration.
+
+Venue: {outlet_name}, {outlet_city}
+Contact: {outlet_phone}
+
+❤️ Every occasion turns into a forever memory under the stars.`
+
 // Alerts the outlet's own team number whenever a booking is confirmed
 // (whether from a fresh booking or a converted lead), so staff know a new
 // booking landed without having to watch the CRM.
@@ -91,12 +178,13 @@ export async function sendTeamBookingAlert(booking: {
   booking_date: string
   time_slot: string
   package_name?: string | null
+  occasion?: string | null
   total_amount: number
 }) {
   const outlet = OUTLET_INFO[booking.outlet] || { name: booking.outlet, address: "", teamPhone: "" }
   if (!outlet.teamPhone) return false
-  const date = new Date(booking.booking_date).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
-  const text = `🔔 New booking at *${outlet.name}*\n\n👤 ${booking.customer_name} (${booking.customer_phone})\n📅 ${date}, ${booking.time_slot}\n${booking.package_name ? `📦 ${booking.package_name}\n` : ""}💰 ₹${booking.total_amount.toLocaleString()}`
+  const template = await getTemplateBody("Booking Confirmation - Team", TEAM_ALERT_FALLBACK)
+  const text = fillTemplate(template, bookingVars(booking))
   return sendWhatsAppText(outlet.teamPhone, text)
 }
 

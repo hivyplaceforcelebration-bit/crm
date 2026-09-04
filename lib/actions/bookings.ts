@@ -4,6 +4,15 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { sendBookingConfirmation, sendReviewRequest, sendTeamBookingAlert } from "@/lib/actions/whatsapp"
 
+const OCCASION_LABELS: Record<string, string> = {
+  candlelight: "Candlelight Dinner",
+  birthday: "Birthday Celebration",
+  anniversary: "Anniversary",
+  proposal: "Proposal / Ring Ceremony",
+  private_celebration: "Private Celebration",
+  other: "Special Occasion",
+}
+
 export type Booking = {
   id: string
   booking_number: string
@@ -151,6 +160,7 @@ export async function createBooking(booking: {
     booking_date: booking.booking_date,
     time_slot: booking.time_slot,
     package_name: booking.package_name,
+    occasion: OCCASION_LABELS[booking.experience_type] || booking.experience_type,
     total_amount: booking.total_amount,
   }
   sendBookingConfirmation(waPayload).catch((err) => console.error("sendBookingConfirmation failed", err))

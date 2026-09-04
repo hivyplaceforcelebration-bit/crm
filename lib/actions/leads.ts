@@ -5,6 +5,15 @@ import { revalidatePath } from "next/cache"
 import { sendBookingConfirmation, sendTeamBookingAlert, sendInvoiceMessage } from "@/lib/actions/whatsapp"
 import { createInvoiceFromBooking, getInvoice } from "@/lib/actions/invoices"
 
+const OCCASION_LABELS: Record<string, string> = {
+  candlelight: "Candlelight Dinner",
+  birthday: "Birthday Celebration",
+  anniversary: "Anniversary",
+  proposal: "Proposal / Ring Ceremony",
+  private_celebration: "Private Celebration",
+  other: "Special Occasion",
+}
+
 export type Lead = {
   id: string
   name: string
@@ -178,6 +187,7 @@ export async function convertLeadToBooking(
     booking_date: booking.booking_date,
     time_slot: booking.time_slot,
     package_name: booking.package_name,
+    occasion: OCCASION_LABELS[booking.experience_type] || booking.experience_type,
     total_amount: booking.total_amount,
   }
   sendBookingConfirmation(waPayload).catch((err) => console.error("sendBookingConfirmation failed", err))
