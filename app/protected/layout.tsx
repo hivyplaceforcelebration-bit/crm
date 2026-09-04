@@ -5,6 +5,7 @@ import { CRMSidebar } from "@/components/crm-sidebar"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { BrandProvider } from "@/hooks/use-brand"
 import { MobileBottomNav } from "@/components/mobile-bottom-nav"
+import { RoleGate } from "@/components/role-gate"
 
 export default async function ProtectedLayout({
   children,
@@ -28,7 +29,9 @@ export default async function ProtectedLayout({
         <CRMSidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
           <DashboardHeader user={user} />
-          <main className="flex-1 overflow-y-auto p-4 pb-24 md:p-8">{children}</main>
+          <main className="flex-1 overflow-y-auto p-4 pb-24 md:p-8">
+            <RoleGate>{children}</RoleGate>
+          </main>
         </div>
         <MobileBottomNav />
       </div>

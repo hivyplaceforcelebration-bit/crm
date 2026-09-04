@@ -130,6 +130,26 @@ export type UserRole = {
   created_at: string
 }
 
+// Defaults to "admin" when the logged-in user has no user_roles row yet -
+// same rationale as current_user_outlet_access() in migration 010: login
+// only requires a Supabase auth account, not a user_roles row, so treating
+// "no role assigned" as unrestricted avoids locking out real accounts that
+// predate the roles feature.
+export async function getCurrentUserRole(): Promise<{ role: string; outlet_access: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { role: "admin", outlet_access: "all" }
+
+  const { data } = await supabase
+    .from("user_roles")
+    .select("role, outlet_access")
+    .eq("id", user.id)
+    .eq("is_active", true)
+    .maybeSingle()
+
+  return data ?? { role: "admin", outlet_access: "all" }
+}
+
 export async function getUserRoles(): Promise<UserRole[]> {
   const supabase = await createClient()
   const { data, error } = await supabase

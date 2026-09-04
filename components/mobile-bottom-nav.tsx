@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
@@ -20,6 +20,8 @@ import {
 } from "lucide-react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { useBrand } from "@/hooks/use-brand"
+import { getCurrentUserRole } from "@/lib/actions/settings"
+import { canAccessRoute } from "@/lib/permissions"
 
 const bottomTabs = [
   { name: "Home", href: "/protected/dashboard", icon: LayoutDashboard },
@@ -41,11 +43,19 @@ export function MobileBottomNav() {
   const pathname = usePathname()
   const { activeBrand } = useBrand()
   const [isOpen, setIsOpen] = useState(false)
+  const [role, setRole] = useState("admin")
+
+  useEffect(() => {
+    getCurrentUserRole().then(({ role }) => setRole(role)).catch(() => {})
+  }, [])
+
+  const visibleBottomTabs = bottomTabs.filter((t) => canAccessRoute(role, t.href))
+  const visibleMoreItems = moreItems.filter((t) => t.href === "/protected/settings" ? role === "admin" : canAccessRoute(role, t.href))
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card/90 backdrop-blur-lg px-2 pb-safe-bottom md:hidden shadow-[0_-4px_20px_-10px_rgba(0,0,0,0.15)]">
       <div className="flex h-16 items-center justify-around">
-        {bottomTabs.map((tab) => {
+        {visibleBottomTabs.map((tab) => {
           const isActive = pathname === tab.href || (tab.href === "/protected/dashboard" && pathname === "/protected")
           const Icon = tab.icon
 
@@ -92,7 +102,7 @@ export function MobileBottomNav() {
                 Secondary Pages
               </p>
               <div className="grid grid-cols-1 gap-1">
-                {moreItems.map((item) => {
+                {visibleMoreItems.map((item) => {
                   const isActive = pathname.startsWith(item.href)
                   const Icon = item.icon
 

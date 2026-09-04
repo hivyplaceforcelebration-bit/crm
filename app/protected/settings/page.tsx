@@ -628,8 +628,7 @@ function SettingsPageInner() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-3">
-                Reference only — these page/feature permissions aren&apos;t enforced yet (every logged-in user can reach every page regardless of role).
-                Outlet scoping is enforced though: a user with Outlet Access set to Surat or Vadodara only sees that outlet&apos;s bookings, leads, customers, invoices and packages — set on the Users tab above.
+                Both enforced: page access follows the chart above (a Manager or Agent trying to open Settings, for example, is blocked), and Outlet Access on the Users tab restricts which outlet&apos;s bookings, leads, customers, invoices and packages a user can see.
               </p>
             </CardContent>
           </Card>

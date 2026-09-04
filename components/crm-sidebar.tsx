@@ -21,7 +21,9 @@ import {
   UserCog,
   Search,
 } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { getCurrentUserRole } from "@/lib/actions/settings"
+import { canAccessRoute } from "@/lib/permissions"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -54,6 +56,13 @@ export function CRMSidebar() {
   const { activeBrand } = useBrand()
   const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/protected/settings"))
   const [searchValue, setSearchValue] = useState("")
+  const [role, setRole] = useState("admin")
+
+  useEffect(() => {
+    getCurrentUserRole().then(({ role }) => setRole(role)).catch(() => {})
+  }, [])
+
+  const visibleSidebarItems = sidebarItems.filter((item) => canAccessRoute(role, item.href))
 
   const runSearch = () => {
     if (!searchValue.trim()) return
@@ -70,7 +79,7 @@ export function CRMSidebar() {
       </div>
 
       <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
-        {sidebarItems.map((item) => {
+        {visibleSidebarItems.map((item) => {
           const isActive = pathname === item.href || 
             (item.href === "/protected/dashboard" && pathname === "/protected")
           return (
@@ -89,7 +98,8 @@ export function CRMSidebar() {
           </Link>
         )})}
 
-        {/* Settings with submenu */}
+        {/* Settings with submenu - admin only */}
+        {role === "admin" && (
         <Collapsible open={settingsOpen} onOpenChange={setSettingsOpen}>
           <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-secondary hover:text-foreground transition-colors">
             <div className="flex items-center gap-3">
@@ -115,6 +125,7 @@ export function CRMSidebar() {
             ))}
           </CollapsibleContent>
         </Collapsible>
+        )}
       </nav>
 
       <div className="border-t p-4">
