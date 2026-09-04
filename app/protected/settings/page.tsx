@@ -26,7 +26,7 @@ import {
   type Outlet, type TimeSlot, type UserRole, type BusinessSettings,
 } from "@/lib/actions/settings"
 import { getTemplates, saveTemplate, deleteTemplate, type MessageTemplate } from "@/lib/actions/marketing"
-import { getWhatsAppHubStatus, startWhatsAppPairing, getWhatsAppQr } from "@/lib/actions/whatsapp"
+import { getWhatsAppHubStatus, startWhatsAppPairing, getWhatsAppQr, disconnectWhatsApp } from "@/lib/actions/whatsapp"
 
 const defaultOutletForm = { name: "", city: "", address: "", phone: "", email: "", capacity: 8 }
 const defaultSlotForm = { slot_name: "", start_time: "16:00", end_time: "17:30", capacity: 1 }
@@ -61,6 +61,7 @@ function SettingsPageInner() {
   const [showQrDialog, setShowQrDialog] = useState(false)
   const [qrImage, setQrImage] = useState<string | null>(null)
   const [qrConnecting, setQrConnecting] = useState(false)
+  const [disconnectingWa, setDisconnectingWa] = useState(false)
 
   // Users & roles
   const [users, setUsers] = useState<UserRole[]>([])
@@ -195,6 +196,19 @@ function SettingsPageInner() {
     }
     setQrConnecting(false)
     toast.error("QR pairing timed out — try again")
+  }
+
+  const handleDisconnectWhatsApp = async () => {
+    if (!confirm("Disconnect this WhatsApp number? Automated messages will stop until a new number is paired.")) return
+    setDisconnectingWa(true)
+    const res = await disconnectWhatsApp()
+    if (res.ok) {
+      toast.success("WhatsApp disconnected")
+      setWaStatus(await getWhatsAppHubStatus())
+    } else {
+      toast.error(res.error || "Failed to disconnect")
+    }
+    setDisconnectingWa(false)
   }
 
   // ── Templates ───────────────────────────────────────────────────────────────
@@ -685,9 +699,15 @@ function SettingsPageInner() {
                   WHATSAPP_HUB_URL / WHATSAPP_HUB_API_KEY aren&apos;t set — messages are silently skipped.
                 </div>
               ) : waStatus.connected ? (
-                <div className="flex items-center gap-2 text-sm">
-                  <Badge className="bg-emerald-500">Connected</Badge>
-                  <span className="text-muted-foreground">{waStatus.phoneNumber || "Automation number"} is paired and sending</span>
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Badge className="bg-emerald-500">Connected</Badge>
+                    <span className="text-muted-foreground">{waStatus.phoneNumber || "Automation number"} is paired and sending</span>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={handleDisconnectWhatsApp} disabled={disconnectingWa}>
+                    {disconnectingWa && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Disconnect
+                  </Button>
                 </div>
               ) : (
                 <div className="flex items-center justify-between gap-2 text-sm">

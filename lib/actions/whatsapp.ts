@@ -110,6 +110,22 @@ export async function startWhatsAppPairing(): Promise<{ ok: boolean; error?: str
   }
 }
 
+// Logs the paired WhatsApp number out of the hub (clears its saved auth),
+// so a different number can be paired via "Connect WhatsApp" afterward.
+export async function disconnectWhatsApp(): Promise<{ ok: boolean; error?: string }> {
+  if (!HUB_URL || !HUB_API_KEY) return { ok: false, error: "WhatsApp hub not configured" }
+  try {
+    const res = await fetch(`${HUB_URL}/internal/session/logout`, {
+      method: "POST",
+      headers: { "x-api-key": HUB_API_KEY },
+    })
+    if (!res.ok) return { ok: false, error: `Hub returned ${res.status}` }
+    return { ok: true }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Failed to reach hub" }
+  }
+}
+
 export async function getWhatsAppQr(): Promise<{ status: string; qr: string | null; phoneNumber?: string | null }> {
   if (!HUB_URL || !HUB_API_KEY) return { status: "NOT_CONFIGURED", qr: null }
   try {
