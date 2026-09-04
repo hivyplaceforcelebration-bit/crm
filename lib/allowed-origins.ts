@@ -50,5 +50,10 @@ export function corsHeaders(origin: string | null) {
     "Access-Control-Allow-Origin": allowed ? origin! : "null",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
+    // navigator.sendBeacon() (used by the tracking script) always sends as
+    // a credentialed request - the browser silently blocks the response
+    // unless this is explicitly "true". Safe here since Allow-Origin above
+    // is always one specific origin, never "*".
+    "Access-Control-Allow-Credentials": "true",
   };
 }
