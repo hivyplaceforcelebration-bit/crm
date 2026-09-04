@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
   Plus, Search, MoreHorizontal, Star, Clock, Users, IndianRupee,
-  Edit, Trash2, Eye, Package, Sparkles, RefreshCw,
+  Edit, Trash2, Eye, Package, Sparkles, RefreshCw, MapPin,
 } from "lucide-react"
+import { useBrand } from "@/hooks/use-brand"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import {
@@ -52,16 +53,18 @@ const addOnTypeColors: Record<string, string> = {
 
 const defaultPkgForm = {
   name: "", short_description: "", base_price: 0, max_people: 2,
-  duration_minutes: 120, experience_type: "candlelight", inclusions: "",
+  duration_minutes: 120, experience_type: "candlelight", inclusions: "", outlet: "Surat",
 }
 
 const defaultAddOnForm = { name: "", price: 0, type: "service" }
 
 export default function PackagesPage() {
+  const { activeCity, isReady } = useBrand()
   const [packages, setPackages] = useState<PkgType[]>([])
   const [addOns, setAddOns] = useState<AddOn[]>([])
   const [loading, setLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
+  const [outletFilter, setOutletFilter] = useState("all")
   const [showPkgDialog, setShowPkgDialog] = useState(false)
   const [showAddOnDialog, setShowAddOnDialog] = useState(false)
   const [editingPkg, setEditingPkg] = useState<PkgType | null>(null)
@@ -69,10 +72,22 @@ export default function PackagesPage() {
   const [addOnForm, setAddOnForm] = useState(defaultAddOnForm)
   const [saving, setSaving] = useState(false)
 
+  // Sync with global activeCity
+  useEffect(() => {
+    if (isReady) {
+      setOutletFilter(activeCity)
+      setPkgForm((f) => ({
+        ...f,
+        outlet: activeCity === "all" ? "Surat" : activeCity
+      }))
+    }
+  }, [activeCity, isReady])
+
   const load = useCallback(async () => {
+    if (!isReady) return
     setLoading(true)
     try {
-      const [pkgs, addons] = await Promise.all([getPackages(), getAddOns()])
+      const [pkgs, addons] = await Promise.all([getPackages({ outlet: outletFilter }), getAddOns()])
       setPackages(pkgs)
       setAddOns(addons)
     } catch {
@@ -80,7 +95,7 @@ export default function PackagesPage() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [outletFilter, isReady])
 
   useEffect(() => { load() }, [load])
 
@@ -101,6 +116,7 @@ export default function PackagesPage() {
       duration_minutes: pkg.duration_minutes,
       experience_type: pkg.experience_type,
       inclusions: pkg.inclusions.join(", "),
+      outlet: pkg.outlet || "Surat",
     })
     setShowPkgDialog(true)
   }
@@ -224,6 +240,16 @@ export default function PackagesPage() {
                   </div>
                 </div>
                 <div className="grid gap-1.5">
+                  <Label>Outlet *</Label>
+                  <Select value={pkgForm.outlet} onValueChange={(v) => setPkgForm((f) => ({ ...f, outlet: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Surat">Surat (Hivy)</SelectItem>
+                      <SelectItem value="Vadodara">Vadodara (Friends Factory)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-1.5">
                   <Label>Inclusions (comma separated)</Label>
                   <Textarea value={pkgForm.inclusions} onChange={(e) => setPkgForm((f) => ({ ...f, inclusions: e.target.value }))} placeholder="Decorated table, 2 Mocktails, 3-course meal..." />
                 </div>
@@ -237,11 +263,26 @@ export default function PackagesPage() {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Search packages or add-ons..." value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+      {/* Search & Filters */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-center">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input placeholder="Search packages or add-ons..." value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+        </div>
+        {activeCity === "all" && (
+          <Select value={outletFilter} onValueChange={setOutletFilter}>
+            <SelectTrigger className="w-[150px]">
+              <MapPin className="mr-2 h-4 w-4" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Outlets</SelectItem>
+              <SelectItem value="Surat">Surat</SelectItem>
+              <SelectItem value="Vadodara">Vadodara</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       <Tabs defaultValue="packages">
@@ -263,6 +304,14 @@ export default function PackagesPage() {
             <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
               {filteredPackages.map((pkg) => (
                 <Card key={pkg.id} className={pkg.is_highlighted ? "border-primary" : ""}>
+                  {pkg.image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={pkg.image_url}
+                      alt={pkg.name}
+                      className="h-40 w-full rounded-t-xl object-cover"
+                    />
+                  )}
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-2">
@@ -270,6 +319,11 @@ export default function PackagesPage() {
                         {pkg.is_highlighted && (
                           <Badge variant="default" className="bg-primary">
                             <Star className="mr-1 h-3 w-3" />Featured
+                          </Badge>
+                        )}
+                        {activeCity === "all" && pkg.outlet && (
+                          <Badge variant="outline">
+                            <MapPin className="mr-1 h-3 w-3" />{pkg.outlet}
                           </Badge>
                         )}
                       </div>

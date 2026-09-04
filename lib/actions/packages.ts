@@ -16,6 +16,7 @@ export type Package = {
   bookings_count: number
   inclusions: string[]
   image_url: string | null
+  outlet: string | null
   created_at: string
 }
 
@@ -29,13 +30,18 @@ export type AddOn = {
   created_at: string
 }
 
-export async function getPackages() {
+export async function getPackages(filters?: { outlet?: string }) {
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from("packages")
     .select("*")
     .order("bookings_count", { ascending: false })
 
+  if (filters?.outlet && filters.outlet !== "all") {
+    query = query.eq("outlet", filters.outlet)
+  }
+
+  const { data, error } = await query
   if (error) throw error
   return data as Package[]
 }
@@ -59,6 +65,7 @@ export async function createPackage(pkg: {
   duration_minutes?: number
   experience_type?: string
   inclusions?: string[]
+  outlet?: string
 }) {
   const supabase = await createClient()
   const { data, error } = await supabase
