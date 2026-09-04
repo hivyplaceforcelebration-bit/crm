@@ -91,14 +91,39 @@ function ConvertDialog({
   const { activeCity } = useBrand()
   const [saving, setSaving] = useState(false)
   const [done, setDone] = useState<{ booking_number: string; id: string } | null>(null)
+  // Pre-select package and time slot from what the lead already told us
+  // (package_name / preferred_time) - still changeable, just a starting
+  // point instead of making staff re-pick what the customer already said.
+  const matchedPackage = lead.package_name
+    ? packages.find((p) => p.name.toLowerCase() === lead.package_name!.toLowerCase())
+    : undefined
+  // The site's time options ("7 PM to 10 PM ...") don't match the CRM's
+  // own slot names (Afternoon/Evening/Night) or labels 1:1, so match by
+  // extracting the lead's start hour and finding the slot whose window
+  // contains it, rather than a string comparison that would rarely hit.
+  const leadStartHour = (() => {
+    const m = lead.preferred_time?.match(/^(\d{1,2})(?::(\d{2}))?\s*(AM|PM)/i)
+    if (!m) return null
+    let h = parseInt(m[1], 10) % 12
+    if (m[3].toUpperCase() === "PM") h += 12
+    return h
+  })()
+  const matchedTimeSlot = leadStartHour !== null
+    ? timeSlots.find((t) => {
+        const startH = parseInt(t.start_time.split(":")[0], 10)
+        const endH = parseInt(t.end_time.split(":")[0], 10) || 24
+        return leadStartHour >= startH && leadStartHour < endH
+      })
+    : undefined
+  const matchedTimeLabel = matchedTimeSlot ? formatTimeRange(matchedTimeSlot.start_time, matchedTimeSlot.end_time) : ""
   const [form, setForm] = useState({
     booking_date: lead.preferred_date || "",
-    time_slot: "",
+    time_slot: matchedTimeLabel,
     outlet: lead.outlet || (activeCity === "all" ? "Vadodara" : activeCity),
-    package_id: "",
+    package_id: matchedPackage?.id || "",
     num_people: "2",
-    base_amount: "",
-    notes: lead.notes || "",
+    base_amount: matchedPackage ? String(matchedPackage.base_price) : "",
+    notes: "",
   })
 
   const selectedPkg = packages.find((p) => p.id === form.package_id)
