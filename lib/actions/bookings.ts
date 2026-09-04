@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
+import { sendBookingConfirmation, sendReviewRequest } from "@/lib/actions/whatsapp"
 
 export type Booking = {
   id: string
@@ -142,6 +143,17 @@ export async function createBooking(booking: {
     await supabase.rpc("update_customer_stats", { p_customer_id: customer.id })
   }
 
+  // Best-effort - a failed WhatsApp send must never fail booking creation.
+  sendBookingConfirmation({
+    customer_name: booking.customer_name,
+    customer_phone: booking.customer_phone,
+    outlet: booking.outlet,
+    booking_date: booking.booking_date,
+    time_slot: booking.time_slot,
+    package_name: booking.package_name,
+    total_amount: booking.total_amount,
+  }).catch((err) => console.error("sendBookingConfirmation failed", err))
+
   revalidatePath("/protected/bookings")
   revalidatePath("/protected/dashboard")
   return data
@@ -149,12 +161,23 @@ export async function createBooking(booking: {
 
 export async function updateBookingStatus(id: string, status: string) {
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("bookings")
     .update({ status })
     .eq("id", id)
+    .select("customer_name, customer_phone, outlet")
+    .single()
 
   if (error) throw error
+
+  if (status === "completed" && data) {
+    sendReviewRequest({
+      customer_name: data.customer_name,
+      customer_phone: data.customer_phone,
+      outlet: data.outlet,
+    }).catch((err) => console.error("sendReviewRequest failed", err))
+  }
+
   revalidatePath("/protected/bookings")
   revalidatePath("/protected/dashboard")
 }
