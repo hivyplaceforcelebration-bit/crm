@@ -491,7 +491,6 @@ function BookingsPageInner() {
       <Tabs defaultValue="table">
         <TabsList>
           <TabsTrigger value="table">Table View</TabsTrigger>
-          <TabsTrigger value="cards">Card View</TabsTrigger>
           <TabsTrigger value="calendar">
             <CalendarDays className="mr-2 h-4 w-4" />
             Calendar
@@ -645,44 +644,6 @@ function BookingsPageInner() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="cards" className="mt-4">
-          {loading ? (
-            <div className="flex items-center justify-center py-16 text-muted-foreground">
-              <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Loading...
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {filteredBookings.map((booking) => (
-                <Card key={booking.id} className="hover:shadow-md transition-shadow">
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <span className="text-xl">{occasionEmoji[booking.experience_type] || "✨"}</span>
-                          <span className="font-mono">{booking.booking_number}</span>
-                        </CardTitle>
-                        <p className="text-sm text-muted-foreground">{booking.package_name || "No package"}</p>
-                      </div>
-                      <Badge className={bookingStatusConfig[booking.status]?.color || ""}>
-                        {bookingStatusConfig[booking.status]?.label || booking.status}
-                      </Badge>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Customer</span><span className="font-medium">{booking.customer_name}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Date</span><span className="font-medium">{new Date(booking.booking_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Time</span><span className="font-medium">{booking.time_slot}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Outlet</span><span className="font-medium">{booking.outlet}</span></div>
-                    <div className="flex items-center justify-between pt-2 border-t">
-                      <Badge className={paymentStatusConfig[booking.payment_status]?.color || ""}>{paymentStatusConfig[booking.payment_status]?.label || booking.payment_status}</Badge>
-                      <span className="font-bold flex items-center"><IndianRupee className="h-4 w-4" />{(booking.total_amount || 0).toLocaleString()}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
       </Tabs>
 
       {/* Payment Recording Dialog */}

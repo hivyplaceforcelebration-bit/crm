@@ -4,8 +4,8 @@ import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
-  Plus, Search, Filter, Phone, MessageCircle, Calendar,
-  MoreHorizontal, ArrowRight, Clock, RefreshCw, Users, Target,
+  Plus, Search, Filter, Phone,
+  MoreHorizontal, Clock, RefreshCw, Users, Target,
   Zap, CheckCircle2, IndianRupee, ChevronRight,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
@@ -23,7 +23,6 @@ import {
 } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table"
@@ -405,7 +404,6 @@ export default function LeadsPage() {
     return !s || l.name.toLowerCase().includes(s) || l.phone.includes(s)
   })
 
-  const getByStatus = (status: string) => filteredLeads.filter((l) => l.status === status)
 
   const handleCreate = async () => {
     if (!addForm.name || !addForm.phone) {
@@ -641,267 +639,111 @@ export default function LeadsPage() {
         </Select>
       </div>
 
-      <Tabs defaultValue="pipeline">
-        <TabsList>
-          <TabsTrigger value="pipeline">Pipeline</TabsTrigger>
-          <TabsTrigger value="table">Table</TabsTrigger>
-        </TabsList>
-
-        {/* ── PIPELINE VIEW ─────────────────────────────────────── */}
-        <TabsContent value="pipeline" className="mt-4">
+      <Card>
+        <CardContent className="p-0">
           {loading ? (
-            <div className="flex items-center justify-center py-20 text-muted-foreground">
+            <div className="flex items-center justify-center py-16 text-muted-foreground">
               <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Loading…
             </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-5">
-              {PIPELINE_STAGES.map((stage) => {
-                const stageLeads = getByStatus(stage)
-                const cfg = statusConfig[stage]
-                const isQualified = stage === "qualified"
-                return (
-                  <div key={stage} className="space-y-2">
-                    {/* Column header */}
-                    <div className="flex items-center gap-2 px-1">
-                      <div className={`w-2 h-2 rounded-full ${cfg.dot}`} />
-                      <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                        {cfg.label}
-                      </span>
-                      <span className="ml-auto text-xs font-bold text-muted-foreground bg-muted rounded-full px-1.5 py-0.5">
-                        {stageLeads.length}
-                      </span>
-                    </div>
-
-                    {/* Cards */}
-                    <div className="space-y-2 min-h-[80px]">
-                      {stageLeads.map((lead) => (
-                        <Card
-                          key={lead.id}
-                          className={`hover:shadow-md transition-all duration-150 ${isQualified ? "border-purple-200 bg-purple-50/30" : ""}`}
-                        >
-                          <CardContent className="p-3 space-y-2.5">
-                            {/* Name + menu */}
-                            <div className="flex items-start justify-between gap-1">
-                              <div className="min-w-0">
-                                <p className="font-semibold text-sm leading-tight truncate">{lead.name}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {occasionEmoji[lead.occasion_type] || "✨"}{" "}
-                                  <span className="capitalize">{lead.occasion_type.replace("_", " ")}</span>
-                                </p>
-                              </div>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0">
-                                    <MoreHorizontal className="h-3 w-3" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-48">
-                                  {stage !== "converted" && stage !== "lost" && (
-                                    <>
-                                      <DropdownMenuItem
-                                        className="text-emerald-600 font-medium"
-                                        onClick={() => setConvertingLead(lead)}
-                                      >
-                                        <Zap className="mr-2 h-3 w-3" /> Convert to Booking
-                                      </DropdownMenuItem>
-                                      <DropdownMenuSeparator />
-                                    </>
-                                  )}
-                                  {PIPELINE_STAGES.filter((s) => s !== stage).map((s) => (
-                                    <DropdownMenuItem key={s} onClick={() => handleStatusChange(lead.id, s)}>
-                                      <ArrowRight className="mr-2 h-3 w-3" />
-                                      Move to {statusConfig[s].label}
-                                    </DropdownMenuItem>
-                                  ))}
-                                  <DropdownMenuSeparator />
-                                  <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(lead.id)}>
-                                    Delete
-                                  </DropdownMenuItem>
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-
-                            {/* Phone */}
-                            <a
-                              href={`tel:${lead.phone}`}
-                              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                            >
-                              <Phone className="h-3 w-3" /> {lead.phone}
-                            </a>
-
-                            {/* Date */}
-                            {lead.preferred_date && (
-                              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                                <Calendar className="h-3 w-3" />
-                                {new Date(lead.preferred_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                              </div>
-                            )}
-
-                            {/* Source */}
-                            {lead.lead_source && (
-                              <Badge
-                                variant="outline"
-                                className={`text-xs capitalize border ${sourceColors[lead.lead_source] || "bg-gray-50 text-gray-700"}`}
-                              >
-                                {lead.lead_source}
-                              </Badge>
-                            )}
-
-                            {/* Actions */}
-                            <div className="grid grid-cols-3 gap-1 pt-0.5">
-                              <Button variant="outline" size="sm" className="h-7 text-xs px-0 justify-center" asChild>
-                                <a href={`tel:${lead.phone}`}>
-                                  <Phone className="h-3 w-3" />
-                                </a>
-                              </Button>
-                              <Button variant="outline" size="sm" className="h-7 text-xs px-0 justify-center text-green-600 hover:text-green-700" asChild>
-                                <a
-                                  href={`https://wa.me/${(lead.whatsapp_number || lead.phone).replace(/\D/g, "")}`}
-                                  target="_blank" rel="noreferrer"
-                                >
-                                  <MessageCircle className="h-3 w-3" />
-                                </a>
-                              </Button>
-                              {stage !== "converted" && stage !== "lost" ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 text-xs px-0 justify-center text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
-                                  onClick={() => setConvertingLead(lead)}
-                                  title="Convert to Booking"
-                                >
-                                  <Zap className="h-3 w-3" />
-                                </Button>
-                              ) : (
-                                <div />
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-
-                      {stageLeads.length === 0 && (
-                        <div className="flex items-center justify-center py-8 text-xs text-muted-foreground border border-dashed rounded-xl">
-                          Empty
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+          ) : filteredLeads.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
+              <Users className="h-8 w-8 opacity-30" />
+              <p className="text-sm">No leads found</p>
+              <Button variant="link" size="sm" onClick={() => setShowAddDialog(true)}>
+                Add your first lead
+              </Button>
             </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>Lead</TableHead>
+                  <TableHead>Contact</TableHead>
+                  <TableHead>Occasion</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Source</TableHead>
+                  <TableHead>Budget</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-[100px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredLeads.map((lead) => (
+                  <TableRow key={lead.id}>
+                    <TableCell>
+                      <div>
+                        <p className="font-medium">{lead.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(lead.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+                        </p>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <a href={`tel:${lead.phone}`} className="text-sm flex items-center gap-1 hover:text-primary">
+                        <Phone className="h-3 w-3" /> {lead.phone}
+                      </a>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm capitalize">
+                        {occasionEmoji[lead.occasion_type] || "✨"} {lead.occasion_type.replace("_", " ")}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {lead.preferred_date
+                        ? new Date(lead.preferred_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
+                        : "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={`text-xs capitalize border ${sourceColors[lead.lead_source] || ""}`}>
+                        {lead.lead_source}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{lead.budget_range || "—"}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={`text-xs border ${statusConfig[lead.status]?.color || ""}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${statusConfig[lead.status]?.dot || ""} mr-1.5 inline-block`} />
+                        {statusConfig[lead.status]?.label || lead.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1">
+                        {lead.status !== "converted" && lead.status !== "lost" && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200"
+                            onClick={() => setConvertingLead(lead)}
+                          >
+                            <Zap className="h-3 w-3 mr-1" /> Convert
+                          </Button>
+                        )}
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-7 w-7">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            {PIPELINE_STAGES.filter((s) => s !== lead.status).map((s) => (
+                              <DropdownMenuItem key={s} onClick={() => handleStatusChange(lead.id, s)}>
+                                Move to {statusConfig[s].label}
+                              </DropdownMenuItem>
+                            ))}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(lead.id)}>
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
-        </TabsContent>
-
-        {/* ── TABLE VIEW ────────────────────────────────────────── */}
-        <TabsContent value="table" className="mt-4">
-          <Card>
-            <CardContent className="p-0">
-              {loading ? (
-                <div className="flex items-center justify-center py-16 text-muted-foreground">
-                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Loading…
-                </div>
-              ) : filteredLeads.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
-                  <Users className="h-8 w-8 opacity-30" />
-                  <p className="text-sm">No leads found</p>
-                  <Button variant="link" size="sm" onClick={() => setShowAddDialog(true)}>
-                    Add your first lead
-                  </Button>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead>Lead</TableHead>
-                      <TableHead>Contact</TableHead>
-                      <TableHead>Occasion</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Source</TableHead>
-                      <TableHead>Budget</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="w-[100px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filteredLeads.map((lead) => (
-                      <TableRow key={lead.id}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{lead.name}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(lead.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <a href={`tel:${lead.phone}`} className="text-sm flex items-center gap-1 hover:text-primary">
-                            <Phone className="h-3 w-3" /> {lead.phone}
-                          </a>
-                        </TableCell>
-                        <TableCell>
-                          <span className="text-sm capitalize">
-                            {occasionEmoji[lead.occasion_type] || "✨"} {lead.occasion_type.replace("_", " ")}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-sm">
-                          {lead.preferred_date
-                            ? new Date(lead.preferred_date).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
-                            : "—"}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`text-xs capitalize border ${sourceColors[lead.lead_source] || ""}`}>
-                            {lead.lead_source}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{lead.budget_range || "—"}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={`text-xs border ${statusConfig[lead.status]?.color || ""}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${statusConfig[lead.status]?.dot || ""} mr-1.5 inline-block`} />
-                            {statusConfig[lead.status]?.label || lead.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-1">
-                            {lead.status !== "converted" && lead.status !== "lost" && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-7 text-xs text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 border-emerald-200"
-                                onClick={() => setConvertingLead(lead)}
-                              >
-                                <Zap className="h-3 w-3 mr-1" /> Convert
-                              </Button>
-                            )}
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-7 w-7">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-44">
-                                {PIPELINE_STAGES.filter((s) => s !== lead.status).map((s) => (
-                                  <DropdownMenuItem key={s} onClick={() => handleStatusChange(lead.id, s)}>
-                                    Move to {statusConfig[s].label}
-                                  </DropdownMenuItem>
-                                ))}
-                                <DropdownMenuSeparator />
-                                <DropdownMenuItem className="text-destructive" onClick={() => handleDelete(lead.id)}>
-                                  Delete
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
     </div>
   )
 }

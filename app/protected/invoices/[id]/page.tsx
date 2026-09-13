@@ -1,4 +1,5 @@
 import { getInvoice } from "@/lib/actions/invoices"
+import { getOutlets } from "@/lib/actions/settings"
 import { notFound } from "next/navigation"
 import { InvoicePrintView } from "./invoice-print-view"
 
@@ -12,5 +13,8 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
     notFound()
   }
 
-  return <InvoicePrintView invoice={invoice} />
+  const outlets = await getOutlets()
+  const outlet = outlets.find((o) => o.city === invoice.outlet) || outlets[0] || null
+
+  return <InvoicePrintView invoice={invoice} outlet={outlet} />
 }

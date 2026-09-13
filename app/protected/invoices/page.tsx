@@ -5,19 +5,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Separator } from "@/components/ui/separator"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
-  Search, Plus, FileText, Eye, MoreVertical,
+  Search, FileText, Eye, MoreVertical,
   IndianRupee, CreditCard, CheckCircle2, Clock, AlertCircle,
   Receipt, Filter, RefreshCw, Phone, Building,
 } from "lucide-react"
 import {
-  getInvoices, createInvoice, recordPayment, getInvoiceStats, type Invoice,
+  getInvoices, recordPayment, getInvoiceStats, type Invoice,
 } from "@/lib/actions/invoices"
 import { useBrand } from "@/hooks/use-brand"
 import { toast } from "sonner"
@@ -28,12 +28,6 @@ const statusConfig: Record<string, { label: string; color: string; icon: any }> 
   partial:  { label: "Partial",  color: "bg-orange-100 text-orange-800",icon: Clock },
   pending:  { label: "Pending",  color: "bg-red-100 text-red-800",      icon: AlertCircle },
   refunded: { label: "Refunded", color: "bg-gray-100 text-gray-800",    icon: RefreshCw },
-}
-
-const defaultInvForm = {
-  customer_name: "", customer_phone: "", outlet: "Surat",
-  subtotal: 0, discount: 0, tax: 0, total_amount: 0,
-  payment_method: "", notes: "",
 }
 
 const defaultPayForm = {
@@ -48,21 +42,15 @@ export default function InvoicesPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [outletFilter, setOutletFilter] = useState("all")
-  const [showNewInv, setShowNewInv] = useState(false)
   const [showPayDialog, setShowPayDialog] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null)
   const [saving, setSaving] = useState(false)
-  const [invForm, setInvForm] = useState(defaultInvForm)
   const [payForm, setPayForm] = useState(defaultPayForm)
 
   // Sync with global activeCity
   useEffect(() => {
     if (isReady) {
       setOutletFilter(activeCity)
-      setInvForm((f) => ({
-        ...f,
-        outlet: activeCity === "all" ? "Surat" : activeCity
-      }))
     }
   }, [activeCity, isReady])
 
@@ -95,46 +83,6 @@ export default function InvoicesPage() {
       inv.customer_phone?.includes(s)
     )
   })
-
-  // Auto-calc total when subtotal/discount/tax changes
-  const handleInvFormChange = (field: string, value: any) => {
-    setInvForm((f) => {
-      const updated = { ...f, [field]: value }
-      if (["subtotal", "discount", "tax"].includes(field)) {
-        updated.total_amount = Math.max(0, (updated.subtotal || 0) - (updated.discount || 0) + (updated.tax || 0))
-      }
-      return updated
-    })
-  }
-
-  const handleCreateInvoice = async () => {
-    if (!invForm.customer_name || !invForm.total_amount) {
-      toast.error("Customer name and total are required")
-      return
-    }
-    setSaving(true)
-    try {
-      await createInvoice({
-        customer_name: invForm.customer_name,
-        customer_phone: invForm.customer_phone || undefined,
-        outlet: invForm.outlet,
-        subtotal: invForm.subtotal,
-        discount: invForm.discount || 0,
-        tax: invForm.tax || 0,
-        total_amount: invForm.total_amount,
-        payment_method: invForm.payment_method || undefined,
-        notes: invForm.notes || undefined,
-      })
-      toast.success("Invoice created!")
-      setShowNewInv(false)
-      setInvForm(defaultInvForm)
-      load()
-    } catch (e: any) {
-      toast.error(e.message || "Failed to create invoice")
-    } finally {
-      setSaving(false)
-    }
-  }
 
   const openPayDialog = (inv: Invoice) => {
     setSelectedInvoice(inv)
@@ -175,75 +123,6 @@ export default function InvoicesPage() {
           <Button variant="outline" size="icon" onClick={load} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
-          <Dialog open={showNewInv} onOpenChange={setShowNewInv}>
-            <DialogTrigger asChild>
-              <Button><Plus className="h-4 w-4 mr-2" />New Invoice</Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>New Invoice</DialogTitle>
-                <DialogDescription>Create a new invoice for a customer</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="grid gap-1.5">
-                    <Label>Customer Name *</Label>
-                    <Input value={invForm.customer_name} onChange={(e) => handleInvFormChange("customer_name", e.target.value)} placeholder="Full name" />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>Phone</Label>
-                    <Input value={invForm.customer_phone} onChange={(e) => handleInvFormChange("customer_phone", e.target.value)} placeholder="+91 98765 43210" />
-                  </div>
-                </div>
-                <div className="grid gap-1.5">
-                  <Label>Outlet</Label>
-                  <Select value={invForm.outlet} onValueChange={(v) => handleInvFormChange("outlet", v)}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Surat">Surat</SelectItem>
-                      <SelectItem value="Vadodara">Vadodara</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="grid gap-1.5">
-                    <Label>Subtotal (₹)</Label>
-                    <Input type="number" value={invForm.subtotal} onChange={(e) => handleInvFormChange("subtotal", parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>Discount (₹)</Label>
-                    <Input type="number" value={invForm.discount} onChange={(e) => handleInvFormChange("discount", parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>Tax (₹)</Label>
-                    <Input type="number" value={invForm.tax} onChange={(e) => handleInvFormChange("tax", parseFloat(e.target.value) || 0)} />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <span className="font-medium">Total Amount</span>
-                  <span className="text-xl font-bold flex items-center">
-                    <IndianRupee className="h-4 w-4" />{invForm.total_amount.toLocaleString()}
-                  </span>
-                </div>
-                <div className="grid gap-1.5">
-                  <Label>Payment Method</Label>
-                  <Select value={invForm.payment_method} onValueChange={(v) => handleInvFormChange("payment_method", v)}>
-                    <SelectTrigger><SelectValue placeholder="Select method" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="upi">UPI</SelectItem>
-                      <SelectItem value="card">Card</SelectItem>
-                      <SelectItem value="online">Online Transfer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowNewInv(false)}>Cancel</Button>
-                <Button onClick={handleCreateInvoice} disabled={saving}>{saving ? "Creating..." : "Create Invoice"}</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
@@ -316,7 +195,7 @@ export default function InvoicesPage() {
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
               <Receipt className="h-8 w-8 mb-2 opacity-30" />
               <p>No invoices found</p>
-              <Button variant="link" onClick={() => setShowNewInv(true)}>Create your first invoice</Button>
+              <p className="text-sm">Invoices are generated automatically when a booking is created.</p>
             </div>
           ) : (
             <Table>

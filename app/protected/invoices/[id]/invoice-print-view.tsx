@@ -1,6 +1,7 @@
 "use client"
 
 import { type Invoice } from "@/lib/actions/invoices"
+import { type Outlet } from "@/lib/actions/settings"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -18,26 +19,14 @@ const methodLabel: Record<string, string> = {
   cash: "Cash", upi: "UPI", card: "Card", online: "Bank Transfer",
 }
 
-const outletDetails: Record<string, { name: string; address: string; phone: string; website: string }> = {
-  Vadodara: {
-    name: "Friends Factory Cafe",
-    address: "424, OneWest, Sevasi – Canal Rd, Gotri, Vadodara – 391101",
-    phone: "+91 74878 88730",
-    website: "friendsfactorycafe.com",
-  },
-  Surat: {
-    name: "HIVY – Place for Celebrations",
-    address: "Surat, Gujarat",
-    phone: "+91 99999 00001",
-    website: "hivy.co.in",
-  },
-}
-
-export function InvoicePrintView({ invoice }: { invoice: Invoice }) {
+export function InvoicePrintView({ invoice, outlet }: { invoice: Invoice; outlet: Outlet | null }) {
   const balance = (invoice.total_amount || 0) - (invoice.amount_paid || 0)
   const cfg = statusConfig[invoice.payment_status] || statusConfig.pending
   const StatusIcon = cfg.icon
-  const outlet = outletDetails[invoice.outlet || ""] || outletDetails.Vadodara
+  const outletName = outlet?.name || invoice.outlet || "—"
+  const outletAddress = outlet?.address || ""
+  const outletPhone = outlet?.phone || ""
+  const outletEmail = outlet?.email || ""
 
   const handlePrint = () => window.print()
 
@@ -70,10 +59,14 @@ export function InvoicePrintView({ invoice }: { invoice: Invoice }) {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <Coffee className="w-5 h-5 opacity-80" />
-                  <span className="font-bold text-lg tracking-tight">{outlet.name}</span>
+                  <span className="font-bold text-lg tracking-tight">{outletName}</span>
                 </div>
-                <p className="text-xs opacity-70 leading-relaxed max-w-xs">{outlet.address}</p>
-                <p className="text-xs opacity-70 mt-0.5">{outlet.phone} · {outlet.website}</p>
+                {outletAddress && <p className="text-xs opacity-70 leading-relaxed max-w-xs">{outletAddress}</p>}
+                {(outletPhone || outletEmail) && (
+                  <p className="text-xs opacity-70 mt-0.5">
+                    {[outletPhone, outletEmail].filter(Boolean).join(" · ")}
+                  </p>
+                )}
               </div>
               <div className="text-right">
                 <p className="text-xs uppercase tracking-widest opacity-70 mb-1">Invoice</p>
@@ -188,7 +181,7 @@ export function InvoicePrintView({ invoice }: { invoice: Invoice }) {
           <div className="border-t bg-muted/30 px-8 py-5 text-center print:bg-gray-50">
             <p className="text-sm font-medium text-foreground">Thank you for celebrating with us! 🎉</p>
             <p className="text-xs text-muted-foreground mt-1">
-              For any queries, contact us at {outlet.phone} or visit {outlet.website}
+              For any queries, contact us at {[outletPhone, outletEmail].filter(Boolean).join(" or ")}
             </p>
           </div>
 

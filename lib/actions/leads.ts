@@ -199,7 +199,9 @@ export async function convertLeadToBooking(
   createInvoiceFromBooking(newBooking.id)
     .then(async (invoiceId) => {
       const invoice = await getInvoice(invoiceId)
-      await sendInvoiceMessage(invoice)
+      if (invoice.customer_phone) {
+        await sendInvoiceMessage({ ...invoice, customer_phone: invoice.customer_phone })
+      }
     })
     .catch((err) => console.error("invoice generation/send failed", err))
 
