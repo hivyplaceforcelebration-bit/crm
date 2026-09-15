@@ -26,7 +26,7 @@ import {
   type Outlet, type TimeSlot, type UserRole, type BusinessSettings,
 } from "@/lib/actions/settings"
 import { getTemplates, saveTemplate, deleteTemplate, type MessageTemplate } from "@/lib/actions/marketing"
-import { getWhatsAppHubStatus, startWhatsAppPairing, getWhatsAppQr, disconnectWhatsApp } from "@/lib/actions/whatsapp"
+import { getWhatsAppHubStatus, getAllWhatsAppSessions, startWhatsAppPairing, getWhatsAppQr, disconnectWhatsApp } from "@/lib/actions/whatsapp"
 
 const defaultOutletForm = { name: "", city: "", address: "", phone: "", email: "", capacity: 8 }
 const defaultSlotForm = { slot_name: "", start_time: "16:00", end_time: "17:30", capacity: 1 }
@@ -58,10 +58,16 @@ function SettingsPageInner() {
   const [templateForm, setTemplateForm] = useState(defaultTemplateForm)
   const [savingTemplate, setSavingTemplate] = useState(false)
   const [waStatus, setWaStatus] = useState<{ configured: boolean; connected?: boolean; phoneNumber?: string | null } | null>(null)
+  // outlet.city -> that outlet's own session (separate from the shared
+  // default above). Populated from getAllWhatsAppSessions().
+  const [outletWaStatus, setOutletWaStatus] = useState<Record<string, { connected: boolean; phoneNumber: string | null }>>({})
   const [showQrDialog, setShowQrDialog] = useState(false)
+  // Which session the open QR dialog is pairing: null = the shared default,
+  // otherwise an outlet's city.
+  const [qrDialogOutlet, setQrDialogOutlet] = useState<string | null>(null)
   const [qrImage, setQrImage] = useState<string | null>(null)
   const [qrConnecting, setQrConnecting] = useState(false)
-  const [disconnectingWa, setDisconnectingWa] = useState(false)
+  const [disconnectingWa, setDisconnectingWa] = useState<string | null>(null)
 
   // Users & roles
   const [users, setUsers] = useState<UserRole[]>([])
@@ -79,8 +85,9 @@ function SettingsPageInner() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [o, s, t, u, b, wa] = await Promise.all([
+      const [o, s, t, u, b, wa, waSessions] = await Promise.all([
         getOutlets(), getTimeSlots(), getTemplates(), getUserRoles(), getBusinessSettings(), getWhatsAppHubStatus(),
+        getAllWhatsAppSessions(),
       ])
       setOutlets(o)
       setSlots(s)
@@ -89,6 +96,13 @@ function SettingsPageInner() {
       setBusiness(b)
       setBusinessForm(b)
       setWaStatus(wa)
+      const byOutlet: Record<string, { connected: boolean; phoneNumber: string | null }> = {}
+      for (const session of waSessions) {
+        if (session.outlet) {
+          byOutlet[session.outlet] = { connected: session.status === "CONNECTED", phoneNumber: session.phoneNumber }
+        }
+      }
+      setOutletWaStatus(byOutlet)
     } catch {
       toast.error("Failed to load settings")
     } finally {
@@ -170,12 +184,15 @@ function SettingsPageInner() {
   }
 
   // ── WhatsApp pairing ───────────────────────────────────────────────────────
-  const handleConnectWhatsApp = async () => {
+  // outlet: undefined pairs the shared default number (unchanged original
+  // behavior); an outlet's city pairs that outlet's own separate number.
+  const handleConnectWhatsApp = async (outlet?: string) => {
+    setQrDialogOutlet(outlet ?? "")
     setShowQrDialog(true)
     setQrConnecting(true)
     setQrImage(null)
 
-    const start = await startWhatsAppPairing()
+    const start = await startWhatsAppPairing(outlet)
     if (!start.ok) {
       toast.error(start.error || "Failed to start pairing")
       setQrConnecting(false)
@@ -184,12 +201,16 @@ function SettingsPageInner() {
 
     for (let i = 0; i < 40; i++) {
       await new Promise((r) => setTimeout(r, 3000))
-      const res = await getWhatsAppQr()
+      const res = await getWhatsAppQr(outlet)
       if (res.status === "CONNECTED") {
         toast.success(`WhatsApp connected: ${res.phoneNumber || ""}`)
         setShowQrDialog(false)
         setQrConnecting(false)
-        setWaStatus(await getWhatsAppHubStatus())
+        if (outlet) {
+          setOutletWaStatus((prev) => ({ ...prev, [outlet]: { connected: true, phoneNumber: res.phoneNumber ?? null } }))
+        } else {
+          setWaStatus(await getWhatsAppHubStatus())
+        }
         return
       }
       if (res.qr) setQrImage(res.qr)
@@ -198,17 +219,21 @@ function SettingsPageInner() {
     toast.error("QR pairing timed out — try again")
   }
 
-  const handleDisconnectWhatsApp = async () => {
+  const handleDisconnectWhatsApp = async (outlet?: string) => {
     if (!confirm("Disconnect this WhatsApp number? Automated messages will stop until a new number is paired.")) return
-    setDisconnectingWa(true)
-    const res = await disconnectWhatsApp()
+    setDisconnectingWa(outlet ?? "")
+    const res = await disconnectWhatsApp(outlet)
     if (res.ok) {
       toast.success("WhatsApp disconnected")
-      setWaStatus(await getWhatsAppHubStatus())
+      if (outlet) {
+        setOutletWaStatus((prev) => ({ ...prev, [outlet]: { connected: false, phoneNumber: null } }))
+      } else {
+        setWaStatus(await getWhatsAppHubStatus())
+      }
     } else {
       toast.error(res.error || "Failed to disconnect")
     }
-    setDisconnectingWa(false)
+    setDisconnectingWa(null)
   }
 
   // ── Templates ───────────────────────────────────────────────────────────────
@@ -704,8 +729,8 @@ function SettingsPageInner() {
                     <Badge className="bg-emerald-500">Connected</Badge>
                     <span className="text-muted-foreground">{waStatus.phoneNumber || "Automation number"} is paired and sending</span>
                   </div>
-                  <Button size="sm" variant="outline" onClick={handleDisconnectWhatsApp} disabled={disconnectingWa}>
-                    {disconnectingWa && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  <Button size="sm" variant="outline" onClick={() => handleDisconnectWhatsApp()} disabled={disconnectingWa === ""}>
+                    {disconnectingWa === "" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                     Disconnect
                   </Button>
                 </div>
@@ -715,16 +740,52 @@ function SettingsPageInner() {
                     <Badge variant="secondary">Not paired</Badge>
                     <span className="text-muted-foreground">Hub is reachable, but no WhatsApp number is scanned in yet.</span>
                   </div>
-                  <Button size="sm" onClick={handleConnectWhatsApp}>Connect WhatsApp</Button>
+                  <Button size="sm" onClick={() => handleConnectWhatsApp()}>Connect WhatsApp</Button>
                 </div>
               )}
             </CardContent>
           </Card>
 
+          {waStatus?.configured && outlets.filter((o) => o.is_active).map((outlet) => {
+            const status = outletWaStatus[outlet.city]
+            return (
+              <Card key={outlet.id}>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">{outlet.name} WhatsApp</CardTitle>
+                  <CardDescription>
+                    Separate number for {outlet.city} — leave unpaired to keep using the shared number above for this outlet.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {status?.connected ? (
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-emerald-500">Connected</Badge>
+                        <span className="text-muted-foreground">{status.phoneNumber || "Outlet number"} is paired and sending</span>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => handleDisconnectWhatsApp(outlet.city)} disabled={disconnectingWa === outlet.city}>
+                        {disconnectingWa === outlet.city && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Disconnect
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">Not paired</Badge>
+                        <span className="text-muted-foreground">No separate number scanned in for {outlet.city} yet.</span>
+                      </div>
+                      <Button size="sm" onClick={() => handleConnectWhatsApp(outlet.city)}>Connect WhatsApp</Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )
+          })}
+
           <Dialog open={showQrDialog} onOpenChange={(o) => { if (!o) setShowQrDialog(false) }}>
             <DialogContent className="max-w-sm">
               <DialogHeader>
-                <DialogTitle>Scan to connect WhatsApp</DialogTitle>
+                <DialogTitle>Scan to connect WhatsApp{qrDialogOutlet ? ` — ${qrDialogOutlet}` : ""}</DialogTitle>
                 <DialogDescription>Open WhatsApp → Settings → Linked Devices → Link a Device</DialogDescription>
               </DialogHeader>
               <div className="flex flex-col items-center justify-center py-4 min-h-[280px]">

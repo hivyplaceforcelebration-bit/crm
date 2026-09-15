@@ -210,10 +210,11 @@ export async function sendReviewRequest(booking: {
   return sendWhatsAppText(booking.customer_phone, text)
 }
 
-export async function getWhatsAppHubStatus(): Promise<{ configured: boolean; connected?: boolean; phoneNumber?: string | null }> {
+export async function getWhatsAppHubStatus(outlet?: string): Promise<{ configured: boolean; connected?: boolean; phoneNumber?: string | null }> {
   if (!HUB_URL || !HUB_API_KEY) return { configured: false }
   try {
-    const res = await fetch(`${HUB_URL}/internal/session`, {
+    const qs = outlet ? `?outlet=${encodeURIComponent(outlet)}` : ""
+    const res = await fetch(`${HUB_URL}/internal/session${qs}`, {
       headers: { "x-api-key": HUB_API_KEY },
       cache: "no-store",
     })
@@ -229,15 +230,38 @@ export async function getWhatsAppHubStatus(): Promise<{ configured: boolean; con
   }
 }
 
+// Every outlet's connection status in one call, for Settings to render a
+// connect/QR card per outlet instead of one global one. Sessions with
+// outlet: null are the original shared/default number.
+export async function getAllWhatsAppSessions(): Promise<
+  Array<{ id: string; label: string; outlet: string | null; phoneNumber: string | null; status: string }>
+> {
+  if (!HUB_URL || !HUB_API_KEY) return []
+  try {
+    const res = await fetch(`${HUB_URL}/internal/sessions`, {
+      headers: { "x-api-key": HUB_API_KEY },
+      cache: "no-store",
+    })
+    if (!res.ok) return []
+    const data = await res.json()
+    return data.sessions ?? []
+  } catch {
+    return []
+  }
+}
+
 // Starts (or restarts) the hub's WhatsApp session so a QR code becomes
 // available, then fetches it. Called from the "Connect WhatsApp" button on
 // Settings so pairing never again requires calling the hub's API by hand.
-export async function startWhatsAppPairing(): Promise<{ ok: boolean; error?: string }> {
+// Pass outlet to pair that specific outlet's own number instead of the
+// shared default (e.g. "Vadodara", "Surat" - matches OUTLET_INFO above).
+export async function startWhatsAppPairing(outlet?: string): Promise<{ ok: boolean; error?: string }> {
   if (!HUB_URL || !HUB_API_KEY) return { ok: false, error: "WhatsApp hub not configured" }
   try {
     const res = await fetch(`${HUB_URL}/internal/session`, {
       method: "POST",
-      headers: { "x-api-key": HUB_API_KEY },
+      headers: { "Content-Type": "application/json", "x-api-key": HUB_API_KEY },
+      body: JSON.stringify(outlet ? { outlet } : {}),
     })
     if (!res.ok) return { ok: false, error: `Hub returned ${res.status}` }
     return { ok: true }
@@ -248,12 +272,13 @@ export async function startWhatsAppPairing(): Promise<{ ok: boolean; error?: str
 
 // Logs the paired WhatsApp number out of the hub (clears its saved auth),
 // so a different number can be paired via "Connect WhatsApp" afterward.
-export async function disconnectWhatsApp(): Promise<{ ok: boolean; error?: string }> {
+export async function disconnectWhatsApp(outlet?: string): Promise<{ ok: boolean; error?: string }> {
   if (!HUB_URL || !HUB_API_KEY) return { ok: false, error: "WhatsApp hub not configured" }
   try {
     const res = await fetch(`${HUB_URL}/internal/session/logout`, {
       method: "POST",
-      headers: { "x-api-key": HUB_API_KEY },
+      headers: { "Content-Type": "application/json", "x-api-key": HUB_API_KEY },
+      body: JSON.stringify(outlet ? { outlet } : {}),
     })
     if (!res.ok) return { ok: false, error: `Hub returned ${res.status}` }
     return { ok: true }
@@ -262,10 +287,11 @@ export async function disconnectWhatsApp(): Promise<{ ok: boolean; error?: strin
   }
 }
 
-export async function getWhatsAppQr(): Promise<{ status: string; qr: string | null; phoneNumber?: string | null }> {
+export async function getWhatsAppQr(outlet?: string): Promise<{ status: string; qr: string | null; phoneNumber?: string | null }> {
   if (!HUB_URL || !HUB_API_KEY) return { status: "NOT_CONFIGURED", qr: null }
   try {
-    const res = await fetch(`${HUB_URL}/internal/session/qr`, {
+    const qs = outlet ? `?outlet=${encodeURIComponent(outlet)}` : ""
+    const res = await fetch(`${HUB_URL}/internal/session/qr${qs}`, {
       headers: { "x-api-key": HUB_API_KEY },
       cache: "no-store",
     })
