@@ -757,77 +757,81 @@ function SettingsPageInner() {
 
         {/* Notifications Tab — templates are real (shared with Marketing), integrations are not wired */}
         <TabsContent value="notifications" className="mt-4 space-y-4">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">WhatsApp Automation</CardTitle>
-              <CardDescription>
-                Sends booking confirmations, 2-day-before reminders and review requests automatically.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {!waStatus?.configured ? (
+          {!waStatus?.configured ? (
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">WhatsApp Automation</CardTitle>
+                <CardDescription>
+                  Sends booking confirmations, 2-day-before reminders and review requests automatically.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Badge variant="secondary">Not configured</Badge>
                   WHATSAPP_HUB_URL / WHATSAPP_HUB_API_KEY aren&apos;t set — messages are silently skipped.
                 </div>
-              ) : waStatus.connected ? (
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Badge className="bg-emerald-500">Connected</Badge>
-                    <span className="text-muted-foreground">{waStatus.phoneNumber || "Automation number"} is paired and sending</span>
-                  </div>
-                  <Button size="sm" variant="outline" onClick={() => handleDisconnectWhatsApp()} disabled={disconnectingWa === ""}>
-                    {disconnectingWa === "" && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Disconnect
-                  </Button>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between gap-2 text-sm">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary">Not paired</Badge>
-                    <span className="text-muted-foreground">Hub is reachable, but no WhatsApp number is scanned in yet.</span>
-                  </div>
-                  <Button size="sm" onClick={() => handleConnectWhatsApp()}>Connect WhatsApp</Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {waStatus?.configured && outlets.filter((o) => o.is_active).map((outlet) => {
-            const status = outletWaStatus[outlet.city]
-            return (
-              <Card key={outlet.id}>
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base">{outlet.name} WhatsApp</CardTitle>
-                  <CardDescription>
-                    Separate number for {outlet.city} — leave unpaired to keep using the shared number above for this outlet.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {status?.connected ? (
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Badge className="bg-emerald-500">Connected</Badge>
-                        <span className="text-muted-foreground">{status.phoneNumber || "Outlet number"} is paired and sending</span>
+              </CardContent>
+            </Card>
+          ) : (
+            /* One card per outlet — no separate "shared number" card. An outlet
+               without its own dedicated pairing just shows the shared/default
+               session's status here (that's what's actually sending its
+               messages), with an option to give it a number of its own. */
+            outlets.filter((o) => o.is_active).map((outlet) => {
+              const dedicated = outletWaStatus[outlet.city]
+              const usingShared = !dedicated?.connected && !!waStatus.connected
+              const connected = dedicated?.connected || usingShared
+              const phoneNumber = dedicated?.connected ? dedicated.phoneNumber : waStatus.phoneNumber
+              return (
+                <Card key={outlet.id}>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base">{outlet.name} WhatsApp</CardTitle>
+                    <CardDescription>
+                      {usingShared
+                        ? `Currently sending via the shared automation number — connect a separate number to give ${outlet.city} its own.`
+                        : `Dedicated number for ${outlet.city}.`}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {connected ? (
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Badge className="bg-emerald-500">Connected</Badge>
+                          <span className="text-muted-foreground">
+                            {phoneNumber || "Number"} is paired and sending{usingShared ? " (shared)" : ""}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {usingShared && (
+                            <Button size="sm" variant="outline" onClick={() => handleConnectWhatsApp(outlet.city)}>
+                              Use separate number
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDisconnectWhatsApp(usingShared ? undefined : outlet.city)}
+                            disabled={disconnectingWa === (usingShared ? "" : outlet.city)}
+                          >
+                            {disconnectingWa === (usingShared ? "" : outlet.city) && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                            Disconnect
+                          </Button>
+                        </div>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => handleDisconnectWhatsApp(outlet.city)} disabled={disconnectingWa === outlet.city}>
-                        {disconnectingWa === outlet.city && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                        Disconnect
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between gap-2 text-sm">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="secondary">Not paired</Badge>
-                        <span className="text-muted-foreground">No separate number scanned in for {outlet.city} yet.</span>
+                    ) : (
+                      <div className="flex items-center justify-between gap-2 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Badge variant="secondary">Not paired</Badge>
+                          <span className="text-muted-foreground">No WhatsApp number connected for {outlet.city} yet.</span>
+                        </div>
+                        <Button size="sm" onClick={() => handleConnectWhatsApp(outlet.city)}>Connect WhatsApp</Button>
                       </div>
-                      <Button size="sm" onClick={() => handleConnectWhatsApp(outlet.city)}>Connect WhatsApp</Button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )
-          })}
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })
+          )}
 
           <Dialog open={showQrDialog} onOpenChange={(o) => { if (!o) setShowQrDialog(false) }}>
             <DialogContent className="max-w-sm">
