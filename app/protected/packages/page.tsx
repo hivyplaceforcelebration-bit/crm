@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import {
   Plus, Search, MoreHorizontal, Star, Clock, Users, IndianRupee,
-  Edit, Trash2, Eye, Package, Sparkles, RefreshCw, MapPin,
+  Edit, Trash2, Eye, Package, Sparkles, RefreshCw, MapPin, Loader2,
 } from "lucide-react"
+import { uploadMedia } from "@/lib/actions/media"
 import { useBrand } from "@/hooks/use-brand"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
@@ -53,7 +54,7 @@ const addOnTypeColors: Record<string, string> = {
 
 const defaultPkgForm = {
   name: "", short_description: "", base_price: 0, max_people: 2,
-  duration_minutes: 120, experience_type: "candlelight", inclusions: "", outlet: "Surat",
+  duration_minutes: 120, experience_type: "candlelight", inclusions: "", outlet: "Surat", image_url: "",
 }
 
 const defaultAddOnForm = { name: "", price: 0, type: "service" }
@@ -71,6 +72,7 @@ export default function PackagesPage() {
   const [pkgForm, setPkgForm] = useState(defaultPkgForm)
   const [addOnForm, setAddOnForm] = useState(defaultAddOnForm)
   const [saving, setSaving] = useState(false)
+  const [uploadingImage, setUploadingImage] = useState(false)
 
   // Sync with global activeCity
   useEffect(() => {
@@ -117,8 +119,22 @@ export default function PackagesPage() {
       experience_type: pkg.experience_type,
       inclusions: pkg.inclusions.join(", "),
       outlet: pkg.outlet || "Surat",
+      image_url: pkg.image_url || "",
     })
     setShowPkgDialog(true)
+  }
+
+  const handlePkgImageUpload = async (file: File) => {
+    setUploadingImage(true)
+    const formData = new FormData()
+    formData.append("file", file)
+    const res = await uploadMedia("package-images", formData)
+    setUploadingImage(false)
+    if ("error" in res) {
+      toast.error(res.error)
+      return
+    }
+    setPkgForm((f) => ({ ...f, image_url: res.url }))
   }
 
   const handleSavePkg = async () => {
@@ -202,6 +218,29 @@ export default function PackagesPage() {
                 <DialogDescription>Fill in the package details</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4 py-4">
+                <div className="grid gap-1.5">
+                  <Label>Photo</Label>
+                  <div className="flex items-center gap-3">
+                    {pkgForm.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={pkgForm.image_url} alt="Package" className="h-16 w-16 rounded-md object-cover border" />
+                    ) : (
+                      <div className="h-16 w-16 rounded-md border border-dashed flex items-center justify-center text-muted-foreground text-xs">
+                        No photo
+                      </div>
+                    )}
+                    <div className="flex flex-col gap-1">
+                      <Input
+                        type="file"
+                        accept="image/png,image/jpeg,image/webp"
+                        disabled={uploadingImage}
+                        onChange={(e) => { const file = e.target.files?.[0]; if (file) handlePkgImageUpload(file) }}
+                        className="text-xs"
+                      />
+                      {uploadingImage && <span className="text-xs text-muted-foreground">Uploading…</span>}
+                    </div>
+                  </div>
+                </div>
                 <div className="grid gap-1.5">
                   <Label>Package Name *</Label>
                   <Input value={pkgForm.name} onChange={(e) => setPkgForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Classic Candlelight Dinner" />

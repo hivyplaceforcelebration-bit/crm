@@ -27,8 +27,9 @@ import {
 } from "@/lib/actions/settings"
 import { getTemplates, saveTemplate, deleteTemplate, type MessageTemplate } from "@/lib/actions/marketing"
 import { getWhatsAppHubStatus, getAllWhatsAppSessions, startWhatsAppPairing, getWhatsAppQr, disconnectWhatsApp } from "@/lib/actions/whatsapp"
+import { uploadMedia } from "@/lib/actions/media"
 
-const defaultOutletForm = { name: "", city: "", address: "", phone: "", email: "", capacity: 8 }
+const defaultOutletForm = { name: "", city: "", address: "", phone: "", email: "", capacity: 8, logo_url: "" }
 const defaultSlotForm = { slot_name: "", start_time: "16:00", end_time: "17:30", capacity: 1 }
 const defaultTemplateForm = { name: "", body: "", category: "transactional" }
 const defaultUserForm = { email: "", password: "", name: "", role: "staff", outlet_access: "all" }
@@ -45,6 +46,7 @@ function SettingsPageInner() {
   const [editingOutlet, setEditingOutlet] = useState<Outlet | null>(null)
   const [outletForm, setOutletForm] = useState(defaultOutletForm)
   const [savingOutlet, setSavingOutlet] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
 
   // Time slots
   const [slots, setSlots] = useState<TimeSlot[]>([])
@@ -124,8 +126,22 @@ function SettingsPageInner() {
       phone: outlet.phone || "",
       email: outlet.email || "",
       capacity: outlet.capacity,
+      logo_url: outlet.logo_url || "",
     })
     setShowAddOutlet(true)
+  }
+
+  const handleLogoUpload = async (file: File) => {
+    setUploadingLogo(true)
+    const formData = new FormData()
+    formData.append("file", file)
+    const res = await uploadMedia("outlet-logos", formData)
+    setUploadingLogo(false)
+    if ("error" in res) {
+      toast.error(res.error)
+      return
+    }
+    setOutletForm((f) => ({ ...f, logo_url: res.url }))
   }
 
   const handleSaveOutlet = async () => {
@@ -383,6 +399,31 @@ function SettingsPageInner() {
                 </DialogHeader>
                 <div className="grid gap-4 py-4">
                   <div className="grid gap-2">
+                    <Label>Logo</Label>
+                    <div className="flex items-center gap-3">
+                      {outletForm.logo_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={outletForm.logo_url} alt="Outlet logo" className="h-14 w-14 rounded-md object-contain border bg-white" />
+                      ) : (
+                        <div className="h-14 w-14 rounded-md border border-dashed flex items-center justify-center text-muted-foreground text-xs">
+                          No logo
+                        </div>
+                      )}
+                      <div className="flex flex-col gap-1">
+                        <Input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                          disabled={uploadingLogo}
+                          onChange={(e) => { const file = e.target.files?.[0]; if (file) handleLogoUpload(file) }}
+                          className="text-xs"
+                        />
+                        <span className="text-xs text-muted-foreground">
+                          {uploadingLogo ? "Uploading…" : "Shown on invoices and in the sidebar when this outlet is selected"}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="grid gap-2">
                     <Label>Outlet Name</Label>
                     <Input placeholder="Friends Factory - City" value={outletForm.name} onChange={(e) => setOutletForm((f) => ({ ...f, name: e.target.value }))} />
                   </div>
@@ -430,12 +471,18 @@ function SettingsPageInner() {
                 <Card key={outlet.id}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
-                      <div>
-                        <CardTitle className="text-lg">{outlet.name}</CardTitle>
-                        <CardDescription className="flex items-center gap-1 mt-1">
-                          <MapPin className="h-3 w-3" />
-                          {outlet.city}
-                        </CardDescription>
+                      <div className="flex items-center gap-3">
+                        {outlet.logo_url && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={outlet.logo_url} alt={`${outlet.name} logo`} className="h-10 w-10 rounded-md object-contain border bg-white" />
+                        )}
+                        <div>
+                          <CardTitle className="text-lg">{outlet.name}</CardTitle>
+                          <CardDescription className="flex items-center gap-1 mt-1">
+                            <MapPin className="h-3 w-3" />
+                            {outlet.city}
+                          </CardDescription>
+                        </div>
                       </div>
                       <Badge
                         variant={outlet.is_active ? "default" : "secondary"}

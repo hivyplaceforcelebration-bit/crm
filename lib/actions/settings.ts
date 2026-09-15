@@ -15,6 +15,7 @@ export type Outlet = {
   email: string | null
   capacity: number
   is_active: boolean
+  logo_url: string | null
   created_at: string
 }
 

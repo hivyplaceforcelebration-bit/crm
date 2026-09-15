@@ -22,7 +22,7 @@ import {
   Search,
 } from "lucide-react"
 import { useEffect, useState } from "react"
-import { getCurrentUserRole } from "@/lib/actions/settings"
+import { getCurrentUserRole, getOutlets } from "@/lib/actions/settings"
 import { canAccessRoute } from "@/lib/permissions"
 import { Input } from "@/components/ui/input"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
@@ -53,14 +53,31 @@ const settingsItems = [
 export function CRMSidebar() {
   const pathname = usePathname()
   const router = useRouter()
-  const { activeBrand } = useBrand()
+  const { activeCity, activeBrand } = useBrand()
   const [settingsOpen, setSettingsOpen] = useState(pathname.startsWith("/protected/settings"))
   const [searchValue, setSearchValue] = useState("")
   const [role, setRole] = useState("admin")
+  const [outletLogo, setOutletLogo] = useState<string | null>(null)
 
   useEffect(() => {
     getCurrentUserRole().then(({ role }) => setRole(role)).catch(() => {})
   }, [])
+
+  // The selected outlet's own uploaded logo, when it has one - falls back to
+  // the generic brand icon+text (activeBrand) otherwise. "all" has no single
+  // outlet to show a logo for.
+  useEffect(() => {
+    if (activeCity === "all") {
+      setOutletLogo(null)
+      return
+    }
+    getOutlets()
+      .then((outlets) => {
+        const match = outlets.find((o) => o.city === activeCity && o.is_active)
+        setOutletLogo(match?.logo_url || null)
+      })
+      .catch(() => setOutletLogo(null))
+  }, [activeCity])
 
   const visibleSidebarItems = sidebarItems.filter((item) => canAccessRoute(role, item.href))
 
@@ -73,7 +90,12 @@ export function CRMSidebar() {
     <div className="flex h-full flex-col bg-card">
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/protected" className="flex items-center gap-3">
-          <Coffee className="h-6 w-6 text-primary" />
+          {outletLogo ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={outletLogo} alt={`${activeBrand.logoText} logo`} className="h-8 w-8 rounded object-contain" />
+          ) : (
+            <Coffee className="h-6 w-6 text-primary" />
+          )}
           <span className="text-lg font-bold text-primary tracking-tight">{activeBrand.logoText}</span>
         </Link>
       </div>

@@ -66,6 +66,7 @@ export async function createPackage(pkg: {
   experience_type?: string
   inclusions?: string[]
   outlet?: string
+  image_url?: string
 }) {
   const supabase = await createClient()
   const { data, error } = await supabase

@@ -58,7 +58,12 @@ export function InvoicePrintView({ invoice, outlet }: { invoice: Invoice; outlet
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-2 mb-1">
-                  <Coffee className="w-5 h-5 opacity-80" />
+                  {outlet?.logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={outlet.logo_url} alt={`${outletName} logo`} className="w-6 h-6 rounded object-contain bg-white/90 p-0.5" />
+                  ) : (
+                    <Coffee className="w-5 h-5 opacity-80" />
+                  )}
                   <span className="font-bold text-lg tracking-tight">{outletName}</span>
                 </div>
                 {outletAddress && <p className="text-xs opacity-70 leading-relaxed max-w-xs">{outletAddress}</p>}
