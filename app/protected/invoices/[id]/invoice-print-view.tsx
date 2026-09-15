@@ -2,6 +2,9 @@
 
 import { type Invoice } from "@/lib/actions/invoices"
 import { type Outlet } from "@/lib/actions/settings"
+import { type Booking } from "@/lib/actions/bookings"
+import { OCCASION_LABELS } from "@/lib/occasion-labels"
+import { getLetterheadForCity } from "@/hooks/use-brand"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
@@ -19,7 +22,19 @@ const methodLabel: Record<string, string> = {
   cash: "Cash", upi: "UPI", card: "Card", online: "Bank Transfer",
 }
 
-export function InvoicePrintView({ invoice, outlet }: { invoice: Invoice; outlet: Outlet | null }) {
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })
+}
+
+export function InvoicePrintView({
+  invoice,
+  outlet,
+  booking,
+}: {
+  invoice: Invoice
+  outlet: Outlet | null
+  booking: Booking | null
+}) {
   const balance = (invoice.total_amount || 0) - (invoice.amount_paid || 0)
   const cfg = statusConfig[invoice.payment_status] || statusConfig.pending
   const StatusIcon = cfg.icon
@@ -27,6 +42,11 @@ export function InvoicePrintView({ invoice, outlet }: { invoice: Invoice; outlet
   const outletAddress = outlet?.address || ""
   const outletPhone = outlet?.phone || ""
   const outletEmail = outlet?.email || ""
+  const letterhead = getLetterheadForCity(outlet?.city || invoice.outlet)
+
+  const description = booking?.package_name || invoice.notes || "Celebration Package"
+  const bookingDate = booking?.booking_date || invoice.created_at
+  const occasion = booking ? OCCASION_LABELS[booking.experience_type] || "Celebration" : "Celebration"
 
   const handlePrint = () => window.print()
 
@@ -53,44 +73,55 @@ export function InvoicePrintView({ invoice, outlet }: { invoice: Invoice; outlet
       <div className="max-w-2xl mx-auto my-8 print:my-0 print:max-w-none">
         <div className="bg-white rounded-2xl shadow-sm print:shadow-none print:rounded-none border border-border/60 overflow-hidden">
 
-          {/* Header */}
-          <div className="bg-primary px-8 py-7 text-primary-foreground print:bg-[#5c3d2e] print:text-white">
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  {outlet?.logo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={outlet.logo_url} alt={`${outletName} logo`} className="w-6 h-6 rounded object-contain bg-white/90 p-0.5" />
-                  ) : (
-                    <Coffee className="w-5 h-5 opacity-80" />
-                  )}
-                  <span className="font-bold text-lg tracking-tight">{outletName}</span>
-                </div>
-                {outletAddress && <p className="text-xs opacity-70 leading-relaxed max-w-xs">{outletAddress}</p>}
-                {(outletPhone || outletEmail) && (
-                  <p className="text-xs opacity-70 mt-0.5">
-                    {[outletPhone, outletEmail].filter(Boolean).join(" · ")}
-                  </p>
-                )}
-              </div>
-              <div className="text-right">
-                <p className="text-xs uppercase tracking-widest opacity-70 mb-1">Invoice</p>
-                <p className="text-2xl font-bold font-mono">{invoice.invoice_number || "—"}</p>
-                <p className="text-xs opacity-70 mt-1">
-                  {new Date(invoice.created_at).toLocaleDateString("en-IN", {
-                    day: "numeric", month: "long", year: "numeric",
-                  })}
-                </p>
-              </div>
-            </div>
+          {/* Letterhead */}
+          <div className="px-8 pt-8 pb-6 text-center border-b border-border/60">
+            {outlet?.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={outlet.logo_url}
+                alt={`${letterhead.businessName} logo`}
+                className="w-14 h-14 rounded object-contain mx-auto mb-2"
+              />
+            ) : (
+              <Coffee className="w-8 h-8 text-primary mx-auto mb-2" />
+            )}
+            <p className="text-xl font-bold tracking-tight uppercase">{letterhead.businessName}</p>
+            <p className="text-xs text-muted-foreground mt-1">{letterhead.tagline}</p>
+            {outletAddress && (
+              <p className="text-xs text-muted-foreground mt-3 leading-relaxed whitespace-pre-line max-w-sm mx-auto">
+                {outletAddress}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground mt-2 space-x-3">
+              {outletPhone && <span>📞 {outletPhone}</span>}
+              {outletEmail && <span>✉️ {outletEmail}</span>}
+              <span>🌐 {letterhead.website}</span>
+            </p>
           </div>
 
           {/* Body */}
           <div className="px-8 py-7 space-y-7">
 
+            {/* Invoice meta */}
+            <div>
+              <p className="text-center text-sm font-bold tracking-[0.2em] text-muted-foreground mb-4">INVOICE</p>
+              <div className="grid grid-cols-2 gap-y-1.5 text-sm">
+                <span className="text-muted-foreground">Invoice No.</span>
+                <span className="text-right font-mono font-medium">{invoice.invoice_number || "—"}</span>
+                <span className="text-muted-foreground">Invoice Date</span>
+                <span className="text-right">{formatDate(invoice.created_at)}</span>
+                <span className="text-muted-foreground">Booking Date</span>
+                <span className="text-right">{formatDate(bookingDate)}</span>
+                <span className="text-muted-foreground">Payment Status</span>
+                <span className={`text-right font-semibold ${cfg.color}`}>{cfg.label}</span>
+              </div>
+            </div>
+
+            <Separator />
+
             {/* Billed To */}
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Billed To</p>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Bill To</p>
               <p className="font-semibold text-base">{invoice.customer_name}</p>
               {invoice.customer_phone && (
                 <p className="text-sm text-muted-foreground mt-0.5">{invoice.customer_phone}</p>
@@ -104,21 +135,18 @@ export function InvoicePrintView({ invoice, outlet }: { invoice: Invoice; outlet
 
             {/* Line Items */}
             <div>
-              <div className="flex items-center justify-between pb-3 border-b">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Description</span>
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Amount</span>
+              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 pb-3 border-b text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <span>Description</span>
+                <span>Qty</span>
+                <span>Rate</span>
+                <span className="text-right">Amount</span>
               </div>
 
-              <div className="py-4 flex items-start justify-between">
-                <div>
-                  <p className="font-medium">
-                    {invoice.notes || "Celebration Package"}
-                  </p>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    {invoice.outlet} · {new Date(invoice.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                  </p>
-                </div>
-                <p className="font-medium tabular-nums">₹{(invoice.subtotal || 0).toLocaleString()}</p>
+              <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 py-4 items-start">
+                <p className="font-medium">{description}</p>
+                <p className="tabular-nums">1</p>
+                <p className="tabular-nums">₹{(invoice.subtotal || 0).toLocaleString()}</p>
+                <p className="font-medium tabular-nums text-right">₹{(invoice.subtotal || 0).toLocaleString()}</p>
               </div>
 
               <Separator />
@@ -129,55 +157,76 @@ export function InvoicePrintView({ invoice, outlet }: { invoice: Invoice; outlet
                   <span className="text-muted-foreground">Subtotal</span>
                   <span className="tabular-nums">₹{(invoice.subtotal || 0).toLocaleString()}</span>
                 </div>
-                {(invoice.discount || 0) > 0 && (
-                  <div className="flex justify-between text-sm text-emerald-600">
-                    <span>Discount</span>
-                    <span className="tabular-nums">−₹{(invoice.discount || 0).toLocaleString()}</span>
-                  </div>
-                )}
-                {(invoice.tax || 0) > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Tax</span>
-                    <span className="tabular-nums">₹{(invoice.tax || 0).toLocaleString()}</span>
-                  </div>
-                )}
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Discount</span>
+                  <span className="tabular-nums">
+                    {(invoice.discount || 0) > 0 ? `−₹${invoice.discount.toLocaleString()}` : "₹0"}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Tax</span>
+                  <span className="tabular-nums">₹{(invoice.tax || 0).toLocaleString()}</span>
+                </div>
                 <Separator />
                 <div className="flex justify-between font-bold text-lg pt-1">
                   <span>Total</span>
                   <span className="tabular-nums">₹{(invoice.total_amount || 0).toLocaleString()}</span>
                 </div>
-                {(invoice.amount_paid || 0) > 0 && (
-                  <div className="flex justify-between text-sm text-emerald-600">
-                    <span>Amount Paid</span>
-                    <span className="tabular-nums">−₹{(invoice.amount_paid || 0).toLocaleString()}</span>
-                  </div>
-                )}
-                {balance > 0 && (
-                  <div className="flex justify-between font-semibold text-red-600">
-                    <span>Balance Due</span>
-                    <span className="tabular-nums">₹{balance.toLocaleString()}</span>
-                  </div>
-                )}
+                <div className="flex justify-between text-sm text-emerald-600">
+                  <span>Amount Paid</span>
+                  <span className="tabular-nums">₹{(invoice.amount_paid || 0).toLocaleString()}</span>
+                </div>
+                <div className={`flex justify-between font-semibold ${balance > 0 ? "text-red-600" : ""}`}>
+                  <span>Balance Due</span>
+                  <span className="tabular-nums">₹{balance.toLocaleString()}</span>
+                </div>
               </div>
             </div>
 
-            {/* Payment Status Banner */}
-            <div className={`rounded-xl border px-5 py-3.5 flex items-center gap-3 ${cfg.bg}`}>
-              <StatusIcon className={`w-5 h-5 ${cfg.color}`} />
-              <div>
-                <p className={`font-semibold text-sm ${cfg.color}`}>
-                  {invoice.payment_status === "paid"
-                    ? "Payment Complete"
-                    : invoice.payment_status === "partial"
-                    ? `Partial Payment — ₹${balance.toLocaleString()} remaining`
-                    : `Payment Due — ₹${balance.toLocaleString()}`}
-                </p>
-                {invoice.payment_method && (
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    via {methodLabel[invoice.payment_method] || invoice.payment_method}
-                  </p>
-                )}
+            <Separator />
+
+            {/* Payment */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Payment</p>
+              <div className="grid grid-cols-2 gap-y-1.5 text-sm">
+                <span className="text-muted-foreground">Payment Method</span>
+                <span className="text-right">{methodLabel[invoice.payment_method || ""] || invoice.payment_method || "—"}</span>
+                <span className="text-muted-foreground">Payment Status</span>
+                <span className={`text-right font-semibold flex items-center justify-end gap-1 ${cfg.color}`}>
+                  {invoice.payment_status === "paid" && <CheckCircle2 className="w-3.5 h-3.5" />}
+                  {invoice.payment_status === "paid" ? "Payment Complete" : cfg.label}
+                </span>
               </div>
+            </div>
+
+            <Separator />
+
+            {/* Booking Details */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Booking Details</p>
+              <div className="grid grid-cols-2 gap-y-1.5 text-sm">
+                <span className="text-muted-foreground">Experience</span>
+                <span className="text-right">{description}</span>
+                <span className="text-muted-foreground">Venue</span>
+                <span className="text-right">{letterhead.businessName}, {outlet?.city || invoice.outlet}</span>
+                <span className="text-muted-foreground">Occasion</span>
+                <span className="text-right">{occasion}</span>
+                <span className="text-muted-foreground">Booking Date</span>
+                <span className="text-right">{formatDate(bookingDate)}</span>
+              </div>
+            </div>
+
+            <Separator />
+
+            {/* Terms & Notes */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Terms &amp; Notes</p>
+              <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
+                <li>Booking is confirmed upon receipt of payment.</li>
+                <li>Package inclusions are as per the selected package at the time of booking.</li>
+                <li>Any additional services or customisations will be charged separately.</li>
+                <li>Please retain this invoice as proof of payment.</li>
+              </ul>
             </div>
 
           </div>

@@ -12,6 +12,32 @@ export type BrandInfo = {
   cityLabel: string
 }
 
+// Plain (non-hook) letterhead info per city, for documents like invoices that
+// need it in server components / outside a BrandProvider. Falls back to the
+// Vadodara/FFC identity for any city not listed here.
+export type CityLetterhead = {
+  businessName: string
+  tagline: string
+  website: string
+}
+
+const letterheads: Record<"Surat" | "Vadodara", CityLetterhead> = {
+  Vadodara: {
+    businessName: "Friends Factory Cafe",
+    tagline: "Private Romantic Celebrations & Café Experiences",
+    website: "friendsfactorycafe.com",
+  },
+  Surat: {
+    businessName: "HIVY – Place for Celebrations",
+    tagline: "Private Romantic Celebrations & Café Experiences",
+    website: "hivy.co.in",
+  },
+}
+
+export function getLetterheadForCity(city?: string | null): CityLetterhead {
+  return letterheads[city as "Surat" | "Vadodara"] || letterheads.Vadodara
+}
+
 type BrandContextType = {
   activeCity: ActiveCity
   activeBrand: BrandInfo

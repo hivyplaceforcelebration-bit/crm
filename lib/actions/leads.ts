@@ -4,15 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 import { revalidatePath } from "next/cache"
 import { sendBookingConfirmation, sendTeamBookingAlert, sendInvoiceMessage } from "@/lib/actions/whatsapp"
 import { createInvoiceFromBooking, getInvoice } from "@/lib/actions/invoices"
-
-const OCCASION_LABELS: Record<string, string> = {
-  candlelight: "Candlelight Dinner",
-  birthday: "Birthday Celebration",
-  anniversary: "Anniversary",
-  proposal: "Proposal / Ring Ceremony",
-  private_celebration: "Private Celebration",
-  other: "Special Occasion",
-}
+import { OCCASION_LABELS } from "@/lib/occasion-labels"
 
 export type Lead = {
   id: string
