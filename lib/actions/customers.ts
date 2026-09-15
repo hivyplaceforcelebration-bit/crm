@@ -127,29 +127,40 @@ export async function updateCustomer(id: string, updates: Partial<Customer>) {
 
 export async function getCustomerStats(outlet?: string) {
   const supabase = await createClient()
-  let query = supabase
-    .from("customers")
-    .select("total_spend, tags, consent_whatsapp, total_bookings, city")
 
-  if (outlet && outlet !== "all") {
-    query = query.eq("city", outlet)
+  // total_spend needs to be summed client-side (Supabase-js has no SUM
+  // aggregate without an RPC), but VIP/WhatsApp/total counts don't need the
+  // row data at all - COUNT queries with head:true ask Postgres for just the
+  // number, so they skip transferring every customer row for those.
+  const spendQuery = () => {
+    let q = supabase.from("customers").select("total_spend")
+    if (outlet && outlet !== "all") q = q.eq("city", outlet)
+    return q
+  }
+  const countQuery = () => {
+    let q = supabase.from("customers").select("*", { count: "exact", head: true })
+    if (outlet && outlet !== "all") q = q.eq("city", outlet)
+    return q
   }
 
-  const { data, error } = await query
-  if (error) throw error
-  const customers = data || []
+  const [spendRes, totalRes, vipRes, whatsappRes] = await Promise.all([
+    spendQuery(),
+    countQuery(),
+    countQuery().contains("tags", ["VIP"]),
+    countQuery().eq("consent_whatsapp", true),
+  ])
+  if (spendRes.error) throw spendRes.error
 
-  const totalRevenue = customers.reduce((sum, c) => sum + (c.total_spend || 0), 0)
-  const vipCustomers = customers.filter((c) => (c.tags || []).includes("VIP")).length
-  const whatsappOptIn = customers.filter((c) => c.consent_whatsapp).length
-  const avgSpend = customers.length > 0 ? Math.round(totalRevenue / customers.length) : 0
+  const totalRevenue = (spendRes.data || []).reduce((sum, c) => sum + (c.total_spend || 0), 0)
+  const total = totalRes.count || 0
+  const avgSpend = total > 0 ? Math.round(totalRevenue / total) : 0
 
   return {
-    total: customers.length,
-    vip: vipCustomers,
+    total,
+    vip: vipRes.count || 0,
     totalRevenue,
     avgSpend,
-    whatsappOptIn,
+    whatsappOptIn: whatsappRes.count || 0,
   }
 }
 

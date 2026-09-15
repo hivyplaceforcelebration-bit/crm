@@ -48,7 +48,7 @@ export default function DashboardPage() {
       const [tBookings, bStats, leads, lStats, cStats] = await Promise.all([
         getTodayBookings(cityFilter),
         getBookingStats(cityFilter),
-        getLeads({ status: "new", outlet: cityFilter }),
+        getLeads({ status: "new", outlet: cityFilter, limit: 4 }),
         getLeadStats(cityFilter),
         getCustomerStats(cityFilter),
       ])

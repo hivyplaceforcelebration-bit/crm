@@ -41,6 +41,7 @@ export async function getLeads(filters?: {
   status?: string
   source?: string
   outlet?: string
+  limit?: number
 }) {
   const supabase = await createClient()
   let query = supabase
@@ -56,6 +57,9 @@ export async function getLeads(filters?: {
   }
   if (filters?.outlet && filters.outlet !== "all") {
     query = query.eq("outlet", filters.outlet)
+  }
+  if (filters?.limit) {
+    query = query.limit(filters.limit)
   }
 
   const { data, error } = await query
@@ -214,24 +218,32 @@ export async function convertLeadToBooking(
 
 export async function getLeadStats(outlet?: string) {
   const supabase = await createClient()
-  let query = supabase
-    .from("leads")
-    .select("status, lead_source, outlet")
 
-  if (outlet && outlet !== "all") {
-    query = query.eq("outlet", outlet)
+  // COUNT queries with head:true ask Postgres for just the row count, not
+  // the rows themselves - much lighter than fetching every lead and
+  // filtering in JS once the table has any real volume.
+  const countFor = (status?: string) => {
+    let query = supabase.from("leads").select("*", { count: "exact", head: true })
+    if (outlet && outlet !== "all") query = query.eq("outlet", outlet)
+    if (status) query = query.eq("status", status)
+    return query
   }
 
-  const { data, error } = await query
-  if (error) throw error
-  const leads = data || []
+  const [total, newC, contacted, qualified, converted, lost] = await Promise.all([
+    countFor(),
+    countFor("new"),
+    countFor("contacted"),
+    countFor("qualified"),
+    countFor("converted"),
+    countFor("lost"),
+  ])
 
   return {
-    total: leads.length,
-    new: leads.filter((l) => l.status === "new").length,
-    contacted: leads.filter((l) => l.status === "contacted").length,
-    qualified: leads.filter((l) => l.status === "qualified").length,
-    converted: leads.filter((l) => l.status === "converted").length,
-    lost: leads.filter((l) => l.status === "lost").length,
+    total: total.count || 0,
+    new: newC.count || 0,
+    contacted: contacted.count || 0,
+    qualified: qualified.count || 0,
+    converted: converted.count || 0,
+    lost: lost.count || 0,
   }
 }
