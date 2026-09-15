@@ -13,8 +13,10 @@ import {
   TrendingUp, IndianRupee, Users, Calendar, Star,
   ArrowUpRight, BarChart3, PieChart, Activity, Target,
   Gift, Heart, Cake, Sparkles, Clock, MapPin, Building, RefreshCw,
+  Search, MousePointerClick, Eye, Gauge, Globe,
 } from "lucide-react"
 import { getAnalyticsData } from "@/lib/actions/analytics"
+import { getSearchConsoleData } from "@/lib/actions/search-console"
 import { useBrand } from "@/hooks/use-brand"
 import { toast } from "sonner"
 
@@ -65,6 +67,19 @@ function StatCardSkeleton() {
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 type AnalyticsData = Awaited<ReturnType<typeof getAnalyticsData>>
+type SearchConsoleData = Awaited<ReturnType<typeof getSearchConsoleData>>
+
+const SEARCH_GRANULARITY_OPTIONS = [
+  { label: "Monthly", value: "monthly" as const },
+  { label: "Quarterly", value: "quarterly" as const },
+  { label: "Yearly", value: "yearly" as const },
+]
+
+function formatCompact(n: number) {
+  if (n >= 100000) return `${(n / 100000).toFixed(1)}L`
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
+  return `${n}`
+}
 
 export default function AnalyticsPage() {
   const { activeCity, isReady } = useBrand()
@@ -72,6 +87,10 @@ export default function AnalyticsPage() {
   const [outlet, setOutlet] = useState("all")
   const [data, setData] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
+
+  const [scData, setScData] = useState<SearchConsoleData | null>(null)
+  const [scLoading, setScLoading] = useState(true)
+  const [scGranularity, setScGranularity] = useState<"monthly" | "quarterly" | "yearly">("monthly")
 
   // Sync with global activeCity
   useEffect(() => {
@@ -93,7 +112,24 @@ export default function AnalyticsPage() {
     }
   }, [days, outlet, isReady])
 
+  const loadSearchConsole = useCallback(async () => {
+    if (!isReady) return
+    setScLoading(true)
+    try {
+      const result = await getSearchConsoleData(outlet === "all" ? undefined : outlet)
+      setScData(result)
+    } catch {
+      toast.error("Failed to load Search Console data")
+    } finally {
+      setScLoading(false)
+    }
+  }, [outlet, isReady])
+
   useEffect(() => { load() }, [load])
+  useEffect(() => { loadSearchConsole() }, [loadSearchConsole])
+
+  const scBuckets = scData?.[scGranularity] ?? []
+  const scMaxImpressions = scBuckets.length > 0 ? Math.max(...scBuckets.map((b) => b.impressions), 1) : 1
 
   const s = data?.summary
   const maxRevenue = data ? Math.max(...data.revenueByMonth.map((r) => r.revenue), 1) : 1
@@ -131,8 +167,13 @@ export default function AnalyticsPage() {
               </SelectContent>
             </Select>
           )}
-          <Button variant="outline" size="icon" onClick={load} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => { load(); loadSearchConsole() }}
+            disabled={loading || scLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${loading || scLoading ? "animate-spin" : ""}`} />
           </Button>
         </div>
       </div>
@@ -600,6 +641,171 @@ export default function AnalyticsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Search Performance — Google Search Console */}
+      <Card>
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-base">
+              <Search className="h-4 w-4" /> Search Performance
+            </CardTitle>
+            <CardDescription>Google Search Console — impressions &amp; clicks across your websites</CardDescription>
+          </div>
+          {scData?.configured && (
+            <Select value={scGranularity} onValueChange={(v) => setScGranularity(v as typeof scGranularity)}>
+              <SelectTrigger className="w-[130px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SEARCH_GRANULARITY_OPTIONS.map((o) => (
+                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </CardHeader>
+        <CardContent>
+          {scLoading ? (
+            <div className="space-y-3">
+              <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
+              </div>
+              <Skeleton className="h-40 w-full" />
+            </div>
+          ) : !scData?.configured ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center gap-2">
+              <Globe className="h-8 w-8 text-muted-foreground" />
+              <p className="text-sm font-medium">Search Console not connected</p>
+              <p className="text-xs text-muted-foreground max-w-sm">
+                Add a Google service account (with read access to your Search Console properties)
+                to see impressions, clicks, CTR and average position from your websites here.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Summary cards */}
+              <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+                <Card className="bg-violet-50 border-violet-100">
+                  <CardHeader className="pb-1 pt-4 px-4">
+                    <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                      <Eye className="h-3 w-3" /> Impressions
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-4 px-4">
+                    <div className="text-2xl font-bold text-violet-700">
+                      {formatCompact(scData.summary?.totalImpressions ?? 0)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">Last ~13 months</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-cyan-50 border-cyan-100">
+                  <CardHeader className="pb-1 pt-4 px-4">
+                    <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                      <MousePointerClick className="h-3 w-3" /> Clicks
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-4 px-4">
+                    <div className="text-2xl font-bold text-cyan-700">
+                      {formatCompact(scData.summary?.totalClicks ?? 0)}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-0.5">Landed on your sites</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-orange-50 border-orange-100">
+                  <CardHeader className="pb-1 pt-4 px-4">
+                    <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                      <Activity className="h-3 w-3" /> CTR
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-4 px-4">
+                    <div className="text-2xl font-bold text-orange-700">{scData.summary?.avgCtr ?? 0}%</div>
+                    <p className="text-xs text-muted-foreground mt-0.5">Click-through rate</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-teal-50 border-teal-100">
+                  <CardHeader className="pb-1 pt-4 px-4">
+                    <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1.5">
+                      <Gauge className="h-3 w-3" /> Avg. Position
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-4 px-4">
+                    <div className="text-2xl font-bold text-teal-700">{scData.summary?.avgPosition ?? 0}</div>
+                    <p className="text-xs text-muted-foreground mt-0.5">Lower is better</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Impressions trend */}
+              {scBuckets.length === 0 ? (
+                <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
+                  No search data for this period
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {scBuckets.map((b) => {
+                    const pct = (b.impressions / scMaxImpressions) * 100
+                    return (
+                      <div key={b.key} className="flex items-center gap-3">
+                        <div className="w-14 text-xs font-medium text-muted-foreground text-right shrink-0">
+                          {b.label}
+                        </div>
+                        <div className="flex-1 h-8 bg-muted rounded-lg overflow-hidden">
+                          <div
+                            className="h-full rounded-lg bg-violet-400 transition-all duration-500"
+                            style={{ width: `${Math.max(pct, pct > 0 ? 2 : 0)}%` }}
+                          />
+                        </div>
+                        <div className="w-16 text-right text-xs font-semibold tabular-nums shrink-0">
+                          {formatCompact(b.impressions)}
+                        </div>
+                        <div className="w-14 text-right text-xs text-muted-foreground tabular-nums shrink-0">
+                          {formatCompact(b.clicks)} clk
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* By site */}
+              {scData.bySite.length > 0 && (
+                <div>
+                  <p className="text-sm font-medium mb-2">By Website</p>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead>Site</TableHead>
+                        <TableHead className="text-center">Outlet</TableHead>
+                        <TableHead className="text-right">Impressions</TableHead>
+                        <TableHead className="text-right">Clicks</TableHead>
+                        <TableHead className="text-right">CTR</TableHead>
+                        <TableHead className="text-right">Avg. Pos.</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {scData.bySite.map((s) => (
+                        <TableRow key={s.site}>
+                          <TableCell className="font-medium text-sm">{s.site.replace("sc-domain:", "")}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant={s.outlet === "Unmapped" ? "outline" : "secondary"}>{s.outlet}</Badge>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">{s.impressions.toLocaleString()}</TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">{s.clicks.toLocaleString()}</TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">{s.ctr}%</TableCell>
+                          <TableCell className="text-right tabular-nums text-sm">{s.position}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Smart Insights — generated from real data */}
       {!loading && data && s && (
