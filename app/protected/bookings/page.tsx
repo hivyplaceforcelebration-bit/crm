@@ -46,6 +46,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Separator } from "@/components/ui/separator"
 import {
   getBookings,
   getBookingStats,
@@ -119,6 +120,7 @@ function BookingsPageInner() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState(defaultForm)
   // Payment recording
+  const [viewingBooking, setViewingBooking] = useState<Booking | null>(null)
   const [paymentBooking, setPaymentBooking] = useState<Booking | null>(null)
   const [paymentAmount, setPaymentAmount] = useState("")
   const [paymentMode, setPaymentMode] = useState("upi")
@@ -599,6 +601,10 @@ function BookingsPageInner() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-48">
+                              <DropdownMenuItem onClick={() => setViewingBooking(booking)}>
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem
                                 className="text-emerald-600 font-medium"
                                 onClick={() => openPaymentDialog(booking)}
@@ -645,6 +651,111 @@ function BookingsPageInner() {
         </TabsContent>
 
       </Tabs>
+
+      {/* View Details Dialog */}
+      <Dialog open={!!viewingBooking} onOpenChange={(o) => !o && setViewingBooking(null)}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          {viewingBooking && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{viewingBooking.booking_number}</DialogTitle>
+                <DialogDescription>Booking details</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-3 py-2 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-muted-foreground text-xs">Customer</div>
+                    <div>{viewingBooking.customer_name}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">Phone</div>
+                    <a href={`tel:${viewingBooking.customer_phone}`} className="hover:text-primary">{viewingBooking.customer_phone}</a>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-muted-foreground text-xs">Outlet</div>
+                    <div>{viewingBooking.outlet}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">Zone</div>
+                    <div>{viewingBooking.table_zone || "—"}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-muted-foreground text-xs">Date</div>
+                    <div>
+                      {new Date(viewingBooking.booking_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">Time Slot</div>
+                    <div>{formatTimeRange(viewingBooking.time_slot)}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-muted-foreground text-xs">Package</div>
+                    <div>{viewingBooking.package_name || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">People</div>
+                    <div>{viewingBooking.num_people}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-muted-foreground text-xs">Status</div>
+                    <Badge className={`mt-0.5 ${bookingStatusConfig[viewingBooking.status]?.color || ""}`}>
+                      {bookingStatusConfig[viewingBooking.status]?.label || viewingBooking.status}
+                    </Badge>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">Payment</div>
+                    <Badge className={`mt-0.5 ${paymentStatusConfig[viewingBooking.payment_status]?.color || ""}`}>
+                      {paymentStatusConfig[viewingBooking.payment_status]?.label || viewingBooking.payment_status}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <div className="text-muted-foreground text-xs">Base</div>
+                    <div>₹{viewingBooking.base_amount.toLocaleString("en-IN")}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">Total</div>
+                    <div>₹{viewingBooking.total_amount.toLocaleString("en-IN")}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">Paid</div>
+                    <div>₹{viewingBooking.amount_paid.toLocaleString("en-IN")}</div>
+                  </div>
+                </div>
+                {viewingBooking.special_request && (
+                  <div>
+                    <div className="text-muted-foreground text-xs">Special Request</div>
+                    <div className="whitespace-pre-wrap">{viewingBooking.special_request}</div>
+                  </div>
+                )}
+                {viewingBooking.notes && (
+                  <div>
+                    <div className="text-muted-foreground text-xs">Notes</div>
+                    <div className="whitespace-pre-wrap">{viewingBooking.notes}</div>
+                  </div>
+                )}
+                <Separator />
+                <div className="text-muted-foreground text-xs">
+                  Created {new Date(viewingBooking.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setViewingBooking(null)}>Close</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Payment Recording Dialog */}
       <Dialog open={!!paymentBooking} onOpenChange={(o) => !o && setPaymentBooking(null)}>

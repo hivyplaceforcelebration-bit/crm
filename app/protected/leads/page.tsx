@@ -364,6 +364,7 @@ export default function LeadsPage() {
   const [saving, setSaving] = useState(false)
   const [addForm, setAddForm] = useState(defaultAddForm)
   const [convertingLead, setConvertingLead] = useState<Lead | null>(null)
+  const [viewingLead, setViewingLead] = useState<Lead | null>(null)
 
   // Sync with global activeCity
   useEffect(() => {
@@ -472,6 +473,93 @@ export default function LeadsPage() {
               onSuccess={() => { load() }}
               onClose={() => setConvertingLead(null)}
             />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* View Details Dialog */}
+      <Dialog open={!!viewingLead} onOpenChange={(o) => { if (!o) setViewingLead(null) }}>
+        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
+          {viewingLead && (
+            <>
+              <DialogHeader>
+                <DialogTitle>{viewingLead.name}</DialogTitle>
+                <DialogDescription>Lead details</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-3 py-2 text-sm">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-muted-foreground text-xs">Phone</div>
+                    <a href={`tel:${viewingLead.phone}`} className="hover:text-primary">{viewingLead.phone}</a>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">Email</div>
+                    <div>{viewingLead.email || "—"}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-muted-foreground text-xs">Occasion</div>
+                    <div className="capitalize">{occasionEmoji[viewingLead.occasion_type] || "✨"} {viewingLead.occasion_type.replace("_", " ")}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">Outlet</div>
+                    <div>{viewingLead.outlet || "—"}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-muted-foreground text-xs">Preferred Date</div>
+                    <div>
+                      {viewingLead.preferred_date
+                        ? new Date(viewingLead.preferred_date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+                        : "—"}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">Preferred Time</div>
+                    <div>{viewingLead.preferred_time || "—"}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-muted-foreground text-xs">Package</div>
+                    <div>{viewingLead.package_name || "—"}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">Budget</div>
+                    <div>{viewingLead.budget_range || "—"}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <div className="text-muted-foreground text-xs">Source</div>
+                    <Badge variant="outline" className={`text-xs capitalize border mt-0.5 ${sourceColors[viewingLead.lead_source] || ""}`}>
+                      {viewingLead.lead_source}
+                    </Badge>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground text-xs">Status</div>
+                    <Badge variant="outline" className={`text-xs border mt-0.5 ${statusConfig[viewingLead.status]?.color || ""}`}>
+                      {statusConfig[viewingLead.status]?.label || viewingLead.status}
+                    </Badge>
+                  </div>
+                </div>
+                {viewingLead.notes && (
+                  <div>
+                    <div className="text-muted-foreground text-xs">Notes</div>
+                    <div className="whitespace-pre-wrap">{viewingLead.notes}</div>
+                  </div>
+                )}
+                <Separator />
+                <div className="text-muted-foreground text-xs">
+                  Received {new Date(viewingLead.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setViewingLead(null)}>Close</Button>
+              </DialogFooter>
+            </>
           )}
         </DialogContent>
       </Dialog>
@@ -724,6 +812,10 @@ export default function LeadsPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem onClick={() => setViewingLead(lead)}>
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             {PIPELINE_STAGES.filter((s) => s !== lead.status).map((s) => (
                               <DropdownMenuItem key={s} onClick={() => handleStatusChange(lead.id, s)}>
                                 Move to {statusConfig[s].label}
