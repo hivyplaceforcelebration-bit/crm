@@ -86,6 +86,21 @@ export function getPropertyIdForOutlet(outlet?: string): {
     }
   }
 
+  if (norm === "all") {
+    const allProps = [
+      process.env.GA4_PROPERTY_ID_FFC,
+      process.env.GA4_PROPERTY_ID_HIVY,
+      process.env.GA4_PROPERTY_ID_BMM,
+    ]
+      .filter(Boolean)
+      .join(",")
+    return {
+      propertyId: allProps || process.env.GA4_PROPERTY_ID || "519483840",
+      brand: "ALL",
+      brandLabel: "All Outlets (Vadodara & Surat & BookMyMoment)",
+    }
+  }
+
   // Default to FFC / Vadodara
   const prop =
     process.env.GA4_PROPERTY_ID_FFC ||
@@ -95,8 +110,8 @@ export function getPropertyIdForOutlet(outlet?: string): {
 
   return {
     propertyId: prop,
-    brand: norm === "all" ? "ALL" : "FFC",
-    brandLabel: norm === "all" ? "Friends Factory Cafe (Vadodara)" : "Friends Factory Cafe (Vadodara)",
+    brand: "FFC",
+    brandLabel: "Friends Factory Cafe (Vadodara)",
   }
 }
 
