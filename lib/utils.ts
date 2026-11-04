@@ -15,6 +15,8 @@ function formatTime12h(time: string): string {
 }
 
 // ("16:00", "18:00") -> "4:00 PM - 6:00 PM"
-export function formatTimeRange(start: string, end: string): string {
+export function formatTimeRange(start: string, end?: string): string {
+  if (!start) return "—"
+  if (!end) return start
   return `${formatTime12h(start)} - ${formatTime12h(end)}`
 }

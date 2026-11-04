@@ -13,17 +13,36 @@ export type SiteOutlet = "Vadodara" | "Surat"
 
 export const SITE_OUTLET_MAP: Record<string, SiteOutlet> = {
   // ── Vadodara / Friends Factory Cafe ──────────────────────────────────────
+  "https://friendsfactorycafe.com/": "Vadodara",
+  "https://candlelightdinnervadodara.com/": "Vadodara",
+  "https://anniversarydinnervadodara.com/": "Vadodara",
+  "https://surprisedatevadodara.com/": "Vadodara",
+  "https://rooftopdatevadodara.com/": "Vadodara",
+  "https://birthdaysurprisevadodara.com/": "Vadodara",
   "sc-domain:friendsfactorycafe.com": "Vadodara",
-  "sc-domain:friendsfactorycaferooftop.com": "Vadodara",
-  "sc-domain:friendsfactorycafebirthday.com": "Vadodara",
-  "sc-domain:friendsfactorycafeanniversary.com": "Vadodara",
-  "sc-domain:friendsfactorycafecandlelight.com": "Vadodara",
+  "sc-domain:candlelightdinnervadodara.com": "Vadodara",
+  "sc-domain:anniversarydinnervadodara.com": "Vadodara",
+  "sc-domain:surprisedatevadodara.com": "Vadodara",
+  "sc-domain:rooftopdatevadodara.com": "Vadodara",
+  "sc-domain:birthdaysurprisevadodara.com": "Vadodara",
 
   // ── Surat / HIVY ─────────────────────────────────────────────────────────
-  "sc-domain:hivycafe.com": "Surat",
-  "sc-domain:hivyrooftop.com": "Surat",
-  "sc-domain:hivybirthday.com": "Surat",
-  "sc-domain:hivysurprisedate.com": "Surat",
+  "https://birthdaysurprisesurat.com/": "Surat",
+  "https://candlelightdinnersurat.com/": "Surat",
+  "https://anniversarydinnersurat.com/": "Surat",
+  "https://surprisedatesurat.com/": "Surat",
+  "sc-domain:birthdaysurprisesurat.com": "Surat",
+  "sc-domain:candlelightdinnersurat.com": "Surat",
+  "sc-domain:anniversarydinnersurat.com": "Surat",
+  "sc-domain:surprisedatesurat.com": "Surat",
+}
+
+export function getOutletForSite(siteUrl: string): SiteOutlet | "Unmapped" {
+  if (SITE_OUTLET_MAP[siteUrl]) return SITE_OUTLET_MAP[siteUrl]
+  const lower = siteUrl.toLowerCase()
+  if (lower.includes("vadodara") || lower.includes("friendsfactory")) return "Vadodara"
+  if (lower.includes("surat") || lower.includes("hivy")) return "Surat"
+  return "Unmapped"
 }
 
 export function getConfiguredSites(): string[] {
@@ -116,7 +135,21 @@ export async function fetchAllSitesRows(startDate: string, endDate: string): Pro
     throw new Error("Google Search Console credentials are not configured")
   }
 
-  const sites = getConfiguredSites()
+  let sites = getConfiguredSites()
+  try {
+    const sc = getClient()
+    const listRes = await sc.sites.list()
+    const verified = (listRes.data.siteEntry || [])
+      .filter((e) => e.permissionLevel && e.permissionLevel !== "siteUnverifiedUser" && e.siteUrl)
+      .map((e) => e.siteUrl as string)
+
+    if (verified.length > 0) {
+      sites = verified
+    }
+  } catch (err) {
+    console.warn("[search-console] could not auto-list verified sites, falling back to static list:", err)
+  }
+
   const results = await Promise.all(sites.map((site) => fetchSiteRows(site, startDate, endDate)))
   return results.flat()
 }

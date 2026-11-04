@@ -13,10 +13,11 @@ import {
   TrendingUp, IndianRupee, Users, Calendar, Star,
   ArrowUpRight, BarChart3, PieChart, Activity, Target,
   Gift, Heart, Cake, Sparkles, Clock, MapPin, Building, RefreshCw,
-  Search, MousePointerClick, Eye, Gauge, Globe,
+  Search, MousePointerClick, Eye, Gauge, Globe, Smartphone, Monitor, Compass, ShieldAlert, CheckCircle2,
 } from "lucide-react"
 import { getAnalyticsData } from "@/lib/actions/analytics"
 import { getSearchConsoleData } from "@/lib/actions/search-console"
+import { getGoogleAnalyticsData } from "@/lib/actions/google-analytics"
 import { useBrand } from "@/hooks/use-brand"
 import { toast } from "sonner"
 
@@ -68,6 +69,7 @@ function StatCardSkeleton() {
 
 type AnalyticsData = Awaited<ReturnType<typeof getAnalyticsData>>
 type SearchConsoleData = Awaited<ReturnType<typeof getSearchConsoleData>>
+type GA4Data = Awaited<ReturnType<typeof getGoogleAnalyticsData>>
 
 const SEARCH_GRANULARITY_OPTIONS = [
   { label: "Monthly", value: "monthly" as const },
@@ -82,7 +84,7 @@ function formatCompact(n: number) {
 }
 
 export default function AnalyticsPage() {
-  const { activeCity, isReady } = useBrand()
+  const { activeCity, activeBrand, isReady } = useBrand()
   const [days, setDays] = useState("30")
   const [outlet, setOutlet] = useState("all")
   const [data, setData] = useState<AnalyticsData | null>(null)
@@ -91,8 +93,12 @@ export default function AnalyticsPage() {
   const [scData, setScData] = useState<SearchConsoleData | null>(null)
   const [scLoading, setScLoading] = useState(true)
   const [scGranularity, setScGranularity] = useState<"monthly" | "quarterly" | "yearly">("monthly")
+  const [scPeriodKey, setScPeriodKey] = useState<string>("all")
 
-  // Sync with global activeCity
+  const [gaData, setGaData] = useState<GA4Data | null>(null)
+  const [gaLoading, setGaLoading] = useState(true)
+
+  // Sync with global activeCity from top bar
   useEffect(() => {
     if (isReady) {
       setOutlet(activeCity)
@@ -125,11 +131,44 @@ export default function AnalyticsPage() {
     }
   }, [outlet, isReady])
 
+  const loadGoogleAnalytics = useCallback(async () => {
+    if (!isReady) return
+    setGaLoading(true)
+    try {
+      const result = await getGoogleAnalyticsData(parseInt(days) || 30, outlet === "all" ? undefined : outlet)
+      setGaData(result)
+    } catch {
+      toast.error("Failed to load Google Analytics data")
+    } finally {
+      setGaLoading(false)
+    }
+  }, [days, outlet, isReady])
+
   useEffect(() => { load() }, [load])
   useEffect(() => { loadSearchConsole() }, [loadSearchConsole])
+  useEffect(() => { loadGoogleAnalytics() }, [loadGoogleAnalytics])
 
   const scBuckets = scData?.[scGranularity] ?? []
   const scMaxImpressions = scBuckets.length > 0 ? Math.max(...scBuckets.map((b) => b.impressions), 1) : 1
+
+  // Dynamic period selection (All vs specific Month/Quarter/Year)
+  const activeScBucket = scPeriodKey !== "all" ? scBuckets.find((b) => b.key === scPeriodKey) : null
+  const scSummary = activeScBucket
+    ? {
+        impressions: activeScBucket.impressions,
+        clicks: activeScBucket.clicks,
+        ctr: activeScBucket.ctr,
+        avgPosition: activeScBucket.position,
+        label: activeScBucket.label,
+      }
+    : {
+        impressions: scData?.summary?.totalImpressions ?? 0,
+        clicks: scData?.summary?.totalClicks ?? 0,
+        ctr: scData?.summary?.avgCtr ?? 0,
+        avgPosition: scData?.summary?.avgPosition ?? 0,
+        label: "Last ~13 months (All)",
+      }
+  const scSiteList = activeScBucket?.bySite ?? scData?.bySite ?? []
 
   const s = data?.summary
   const maxRevenue = data ? Math.max(...data.revenueByMonth.map((r) => r.revenue), 1) : 1
@@ -364,283 +403,316 @@ export default function AnalyticsPage() {
         </Card>
       </div>
 
-      {/* Detailed Tabs */}
-      <Tabs defaultValue="packages">
-        <TabsList>
-          <TabsTrigger value="packages">Packages</TabsTrigger>
-          <TabsTrigger value="sources">Lead Sources</TabsTrigger>
-          <TabsTrigger value="outlets">Outlets</TabsTrigger>
-          <TabsTrigger value="slots">Time Slots</TabsTrigger>
-        </TabsList>
-
-        {/* ── Package Performance ───────────────────────────────────── */}
-        <TabsContent value="packages" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Package Performance</CardTitle>
-              <CardDescription>Bookings and revenue by experience package</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading || !data ? (
-                <div className="p-6 space-y-3">
-                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-                </div>
-              ) : data.packagePerformance.length === 0 ? (
-                <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
-                  No bookings in this period
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead>Package</TableHead>
-                      <TableHead className="text-center w-24">Bookings</TableHead>
-                      <TableHead className="text-right w-32">Revenue</TableHead>
-                      <TableHead className="w-40">Share</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.packagePerformance.map((pkg, i) => (
-                      <TableRow key={pkg.name}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            {i === 0 && <span className="text-amber-500 text-base">🏆</span>}
-                            <span className="font-medium text-sm">{pkg.name}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="secondary">{pkg.bookings}</Badge>
-                        </TableCell>
-                        <TableCell className="text-right font-medium tabular-nums text-sm">
-                          ₹{pkg.revenue.toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <Progress value={pkg.pct} className="h-2 flex-1" />
-                            <span className="text-xs text-muted-foreground w-8 text-right">{pkg.pct}%</span>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── Lead Sources ──────────────────────────────────────────── */}
-        <TabsContent value="sources" className="mt-4 space-y-4">
-          {/* Leads by Website Domain */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <BarChart3 className="h-4 w-4" /> Leads by Website
-              </CardTitle>
-              <CardDescription>Which of your 12 websites is sending the most enquiries</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading || !data ? (
-                <div className="space-y-2">
-                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-8 w-full" />)}
-                </div>
-              ) : !data.leadsByDomain || data.leadsByDomain.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">No domain data yet — leads will appear once websites start submitting with <code>source_domain</code></p>
-              ) : (
-                <div className="space-y-2">
-                  {data.leadsByDomain.map((item, idx) => {
-                    const maxCount = data.leadsByDomain[0]?.count || 1
-                    const pct = Math.round((item.count / maxCount) * 100)
-                    const colors = ["bg-violet-500","bg-blue-500","bg-emerald-500","bg-amber-500","bg-rose-500","bg-cyan-500","bg-orange-500","bg-pink-500"]
-                    return (
-                      <div key={item.domain} className="flex items-center gap-3 text-sm">
-                        <span className="w-4 text-xs text-muted-foreground text-right">{idx + 1}</span>
-                        <span className="flex-1 truncate font-medium text-xs">{item.domain}</span>
-                        <div className="w-32 bg-muted rounded-full h-2 overflow-hidden">
-                          <div className={`h-2 rounded-full ${colors[idx % colors.length]}`} style={{ width: `${pct}%` }} />
-                        </div>
-                        <span className="w-8 text-right font-bold">{item.count}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Lead Source Analysis</CardTitle>
-              <CardDescription>Conversion rates by acquisition channel</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              {loading || !data ? (
-                <div className="p-6 space-y-3">
-                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-10 w-full" />)}
-                </div>
-              ) : data.leadSources.length === 0 ? (
-                <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
-                  No leads in this period
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow className="hover:bg-transparent">
-                      <TableHead>Source</TableHead>
-                      <TableHead className="text-center">Leads</TableHead>
-                      <TableHead className="text-center">Converted</TableHead>
-                      <TableHead className="text-center">Rate</TableHead>
-                      <TableHead className="w-40">Performance</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {data.leadSources.map((src) => (
-                      <TableRow key={src.source}>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2.5 h-2.5 rounded-full ${SOURCE_COLORS[src.source] || "bg-gray-400"}`} />
-                            <span className="font-medium capitalize text-sm">{src.source}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center text-sm">{src.total}</TableCell>
-                        <TableCell className="text-center">
-                          <Badge variant="secondary">{src.converted}</Badge>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Badge
-                            variant="outline"
-                            className={src.rate >= 40
-                              ? "text-emerald-700 border-emerald-300 bg-emerald-50"
-                              : src.rate >= 25
-                              ? "text-amber-700 border-amber-300 bg-amber-50"
-                              : ""}
-                          >
-                            {src.rate}%
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Progress value={src.rate} className="h-2" />
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* ── Outlet Performance ────────────────────────────────────── */}
-
-        <TabsContent value="outlets" className="mt-4">
-          {loading || !data ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              {[0, 1].map((i) => (
-                <Card key={i}><CardContent className="p-6"><Skeleton className="h-40 w-full" /></CardContent></Card>
-              ))}
+      {/* ─── Google Analytics 4 (Website Visitors & Traffic) ─── */}
+      <Card className="border-amber-200/60 shadow-sm overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-amber-50/70 via-orange-50/50 to-transparent pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <CardTitle className="flex items-center gap-2 text-base font-bold text-stone-900">
+                  <Activity className="h-5 w-5 text-amber-600" /> Google Analytics 4 — Visitors &amp; Traffic
+                </CardTitle>
+                <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800 text-xs font-semibold">
+                  {activeCity === "Surat" ? "✨ HIVY Cafe" : "☕ Friends Factory Cafe"}
+                </Badge>
+                {gaData?.propertyId && (
+                  <Badge variant="secondary" className="text-[11px] font-mono text-stone-600">
+                    ID: {gaData.propertyId}
+                  </Badge>
+                )}
+              </div>
+              <CardDescription className="text-xs mt-1">
+                Real-time website traffic, user sessions, channels and popular packages for {activeCity === "Surat" ? "HIVY (Surat)" : "Friends Factory Cafe (Vadodara)"}
+              </CardDescription>
             </div>
-          ) : data.outletPerformance.length === 0 ? (
-            <Card>
-              <CardContent className="flex items-center justify-center py-12 text-muted-foreground text-sm">
-                No bookings in this period
-              </CardContent>
-            </Card>
+
+            <div className="flex items-center gap-2">
+              {/* Realtime live users pill */}
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full shadow-xs">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs font-semibold text-emerald-800">
+                  {gaData?.overview?.realtimeUsers ?? 0} Live Right Now
+                </span>
+              </div>
+
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-8 text-xs gap-1 border-stone-300"
+                onClick={() => loadGoogleAnalytics()}
+                disabled={gaLoading}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${gaLoading ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+
+        <CardContent className="pt-5 space-y-6">
+          {gaLoading ? (
+            <div className="space-y-4">
+              <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+                {Array.from({ length: 4 }).map((_, i) => <StatCardSkeleton key={i} />)}
+              </div>
+              <Skeleton className="h-44 w-full" />
+            </div>
+          ) : !gaData?.configured ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center gap-2 bg-stone-50 rounded-xl p-6 border border-dashed">
+              <ShieldAlert className="h-9 w-9 text-amber-600" />
+              <p className="text-sm font-semibold">
+                {outlet === "Surat"
+                  ? "HIVY (Surat) GA4 Property ID Missing"
+                  : "Google Analytics Credentials Missing"}
+              </p>
+              <p className="text-xs text-muted-foreground max-w-md">
+                {outlet === "Surat" ? (
+                  <>
+                    To view analytics for HIVY Surat, add your HIVY GA4 Property ID in{" "}
+                    <code className="bg-stone-200 px-1 py-0.5 rounded text-stone-800">.env.local</code>:
+                    <br />
+                    <code className="font-mono text-amber-800 text-[11px] block mt-1">
+                      GA4_PROPERTY_ID_HIVY="your_property_id"
+                    </code>
+                  </>
+                ) : (
+                  <>
+                    Configure your service account in{" "}
+                    <code className="bg-stone-200 px-1 py-0.5 rounded text-stone-800">.env.local</code> to see live visitors and sessions.
+                  </>
+                )}
+              </p>
+            </div>
+          ) : !gaData?.hasPermission ? (
+            <div className="flex flex-col items-center justify-center py-10 text-center gap-3 bg-amber-50/70 rounded-xl p-6 border border-amber-200">
+              <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
+                <ShieldAlert className="h-6 w-6" />
+              </div>
+              <div>
+                <p className="text-base font-bold text-amber-950">1-Step Setup Required in Google Analytics</p>
+                <p className="text-xs text-amber-800/90 max-w-lg mt-1">
+                  Google Analytics Data API is connected! To display your live traffic, add this Service Account as a <strong>Viewer</strong> in GA4:
+                </p>
+              </div>
+
+              <div className="bg-white px-4 py-2 rounded-lg border border-amber-300 text-xs font-mono select-all text-stone-800 shadow-xs">
+                friendsfactory-indexing@third-fold-463513-n9.iam.gserviceaccount.com
+              </div>
+
+              <div className="text-[11px] text-amber-900 bg-amber-100/60 p-3 rounded-lg max-w-md text-left space-y-1">
+                <p className="font-semibold">How to grant access in 30 seconds:</p>
+                <ol className="list-decimal list-inside space-y-0.5 text-amber-850">
+                  <li>In Google Analytics, click <strong>⚙️ Admin</strong> (bottom-left)</li>
+                  <li>Click <strong>Property Access Management</strong></li>
+                  <li>Click <strong>+</strong> ➔ <strong>Add users</strong> and paste the email above with <strong>Viewer</strong> role</li>
+                </ol>
+              </div>
+
+              <Button
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white mt-1 gap-1 text-xs"
+                onClick={() => loadGoogleAnalytics()}
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Check Connection Now
+              </Button>
+            </div>
           ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {data.outletPerformance.map((o) => (
-                <Card key={o.outlet}>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <MapPin className="h-4 w-4 text-muted-foreground" />
-                      {o.outlet}
+            <div className="space-y-6">
+              {/* Top Metrics Row */}
+              <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
+                <Card className="bg-gradient-to-br from-amber-50 to-orange-50/60 border-amber-200/70">
+                  <CardHeader className="pb-1 pt-3.5 px-3.5">
+                    <CardTitle className="text-[11px] font-semibold text-amber-900 flex items-center gap-1">
+                      <Users className="h-3 w-3 text-amber-600" /> Active Visitors
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="grid grid-cols-3 gap-4 text-center">
-                      <div className="space-y-0.5">
-                        <p className="text-2xl font-bold">{o.bookings}</p>
-                        <p className="text-xs text-muted-foreground">Bookings</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-2xl font-bold">
-                          {o.revenue >= 100000
-                            ? `₹${(o.revenue / 100000).toFixed(1)}L`
-                            : `₹${(o.revenue / 1000).toFixed(0)}k`}
-                        </p>
-                        <p className="text-xs text-muted-foreground">Revenue</p>
-                      </div>
-                      <div className="space-y-0.5">
-                        <p className="text-2xl font-bold">₹{o.avgValue.toLocaleString()}</p>
-                        <p className="text-xs text-muted-foreground">Avg. Value</p>
-                      </div>
+                  <CardContent className="pb-3.5 px-3.5">
+                    <div className="text-2xl font-bold text-amber-950">
+                      {gaData.overview.activeUsers.toLocaleString()}
                     </div>
-                    <div className="pt-2 border-t">
-                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1.5">
-                        <span>Share of total bookings</span>
-                        <span>{data.summary.totalBookings > 0
-                          ? Math.round((o.bookings / data.summary.totalBookings) * 100)
-                          : 0}%</span>
-                      </div>
-                      <Progress
-                        value={data.summary.totalBookings > 0
-                          ? (o.bookings / data.summary.totalBookings) * 100
-                          : 0}
-                        className="h-2"
-                      />
-                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Last {days} days</p>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          )}
-        </TabsContent>
 
-        {/* ── Time Slots ────────────────────────────────────────────── */}
-        <TabsContent value="slots" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Clock className="h-4 w-4" /> Time Slot Performance
-              </CardTitle>
-              <CardDescription>Which slots get booked most</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading || !data ? (
-                <div className="space-y-3">
-                  {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
-                </div>
-              ) : data.timeSlots.length === 0 ? (
-                <div className="flex items-center justify-center py-10 text-muted-foreground text-sm">
-                  No bookings with time slot data
-                </div>
-              ) : (
-                <div className="space-y-2.5">
-                  {data.timeSlots.map((slot, i) => (
-                    <div key={slot.slot} className="flex items-center gap-4 p-3 bg-muted/40 rounded-xl hover:bg-muted/60 transition-colors">
-                      <div className="flex items-center gap-2 w-48 shrink-0">
-                        {i === 0 && <span className="text-amber-500 text-sm">🔥</span>}
-                        <span className="text-sm font-medium">{slot.slot}</span>
-                      </div>
-                      <div className="flex-1">
-                        <div className="h-7 bg-background rounded-lg overflow-hidden border">
-                          <div
-                            className="h-full rounded-lg bg-primary/70 transition-all duration-500"
-                            style={{ width: `${Math.max(slot.pct, slot.pct > 0 ? 3 : 0)}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="text-center w-20 shrink-0">
-                        <p className="text-base font-bold">{slot.count}</p>
-                        <p className="text-xs text-muted-foreground">bookings</p>
-                      </div>
+                <Card className="bg-gradient-to-br from-blue-50 to-indigo-50/60 border-blue-200/70">
+                  <CardHeader className="pb-1 pt-3.5 px-3.5">
+                    <CardTitle className="text-[11px] font-semibold text-blue-900 flex items-center gap-1">
+                      <Sparkles className="h-3 w-3 text-blue-600" /> New Visitors
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-3.5 px-3.5">
+                    <div className="text-2xl font-bold text-blue-950">
+                      {gaData.overview.newUsers.toLocaleString()}
                     </div>
-                  ))}
+                    <p className="text-[10px] text-muted-foreground mt-0.5">First-time visitors</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-violet-50 to-purple-50/60 border-violet-200/70">
+                  <CardHeader className="pb-1 pt-3.5 px-3.5">
+                    <CardTitle className="text-[11px] font-semibold text-violet-900 flex items-center gap-1">
+                      <Activity className="h-3 w-3 text-violet-600" /> Total Sessions
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-3.5 px-3.5">
+                    <div className="text-2xl font-bold text-violet-950">
+                      {gaData.overview.sessions.toLocaleString()}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Browsing sessions</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-emerald-50 to-teal-50/60 border-emerald-200/70">
+                  <CardHeader className="pb-1 pt-3.5 px-3.5">
+                    <CardTitle className="text-[11px] font-semibold text-emerald-900 flex items-center gap-1">
+                      <Eye className="h-3 w-3 text-emerald-600" /> Page Views
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-3.5 px-3.5">
+                    <div className="text-2xl font-bold text-emerald-950">
+                      {gaData.overview.pageViews.toLocaleString()}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Total views</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-rose-50 to-pink-50/60 border-rose-200/70">
+                  <CardHeader className="pb-1 pt-3.5 px-3.5">
+                    <CardTitle className="text-[11px] font-semibold text-rose-900 flex items-center gap-1">
+                      <Clock className="h-3 w-3 text-rose-600" /> Avg. Time
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-3.5 px-3.5">
+                    <div className="text-2xl font-bold text-rose-950">
+                      {Math.floor(gaData.overview.avgSessionDuration / 60)}m {gaData.overview.avgSessionDuration % 60}s
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Per session</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-to-br from-stone-50 to-gray-100/70 border-stone-200/70">
+                  <CardHeader className="pb-1 pt-3.5 px-3.5">
+                    <CardTitle className="text-[11px] font-semibold text-stone-900 flex items-center gap-1">
+                      <Gauge className="h-3 w-3 text-stone-600" /> Bounce Rate
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="pb-3.5 px-3.5">
+                    <div className="text-2xl font-bold text-stone-950">
+                      {gaData.overview.bounceRate}%
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Single page exits</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* 2-Column Section: Trends & Traffic Channels */}
+              <div className="grid gap-5 md:grid-cols-2">
+                {/* Traffic Channels */}
+                <div className="p-4 rounded-xl border border-stone-200 bg-white shadow-2xs">
+                  <h4 className="text-sm font-semibold text-stone-800 flex items-center gap-2 mb-3">
+                    <Compass className="h-4 w-4 text-amber-600" /> Traffic Channels (Acquisition)
+                  </h4>
+                  {gaData.trafficSources.length === 0 ? (
+                    <p className="text-xs text-muted-foreground py-6 text-center">No traffic channels detected yet.</p>
+                  ) : (
+                    <div className="space-y-2.5">
+                      {gaData.trafficSources.map((ch) => (
+                        <div key={ch.channel} className="space-y-1">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-medium text-stone-700">{ch.channel}</span>
+                            <span className="text-muted-foreground font-mono">
+                              {ch.sessions.toLocaleString()} sessions ({ch.percentage}%)
+                            </span>
+                          </div>
+                          <Progress value={ch.percentage} className="h-2 bg-stone-100" />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Visitor Cities & Devices */}
+                <div className="p-4 rounded-xl border border-stone-200 bg-white shadow-2xs space-y-4">
+                  <div>
+                    <h4 className="text-sm font-semibold text-stone-800 flex items-center gap-2 mb-2">
+                      <MapPin className="h-4 w-4 text-amber-600" /> Top Visitor Cities
+                    </h4>
+                    {gaData.topCities.length === 0 ? (
+                      <p className="text-xs text-muted-foreground py-2">No city data available yet.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        {gaData.topCities.map((c) => (
+                          <Badge key={c.city} variant="secondary" className="px-2.5 py-1 text-xs gap-1.5 bg-stone-100 text-stone-800">
+                            <span>📍 {c.city}</span>
+                            <span className="font-bold text-amber-700">{c.users}</span>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="pt-2 border-t border-stone-100">
+                    <h4 className="text-xs font-semibold text-stone-700 flex items-center gap-2 mb-2">
+                      <Smartphone className="h-3.5 w-3.5 text-stone-500" /> Device Breakdown
+                    </h4>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      {gaData.devices.map((d) => (
+                        <div key={d.device} className="bg-stone-50 p-2 rounded-lg border border-stone-200/60">
+                          <p className="text-xs capitalize font-medium text-stone-700 flex items-center justify-center gap-1">
+                            {d.device === "mobile" ? <Smartphone className="h-3 w-3" /> : <Monitor className="h-3 w-3" />}
+                            {d.device}
+                          </p>
+                          <p className="text-sm font-bold text-stone-900 mt-0.5">{d.percentage}%</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Top Visited Pages / Setups Table */}
+              {gaData.topPages.length > 0 && (
+                <div className="p-4 rounded-xl border border-stone-200 bg-white shadow-2xs">
+                  <h4 className="text-sm font-semibold text-stone-800 flex items-center gap-2 mb-3">
+                    <BarChart3 className="h-4 w-4 text-amber-600" /> Top Visited Packages &amp; Pages
+                  </h4>
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="hover:bg-transparent">
+                        <TableHead className="text-xs">Page Path</TableHead>
+                        <TableHead className="text-xs">Page Title</TableHead>
+                        <TableHead className="text-right text-xs">Page Views</TableHead>
+                        <TableHead className="text-right text-xs">Active Visitors</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {gaData.topPages.map((p) => (
+                        <TableRow key={p.path} className="text-xs">
+                          <TableCell className="font-mono text-stone-700 font-medium">
+                            {p.path}
+                          </TableCell>
+                          <TableCell className="text-stone-600 max-w-xs truncate">
+                            {p.title}
+                          </TableCell>
+                          <TableCell className="text-right font-semibold tabular-nums text-amber-700">
+                            {p.pageViews.toLocaleString()}
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums text-stone-800">
+                            {p.activeUsers.toLocaleString()}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Search Performance — Google Search Console */}
       <Card>
@@ -652,16 +724,45 @@ export default function AnalyticsPage() {
             <CardDescription>Google Search Console — impressions &amp; clicks across your websites</CardDescription>
           </div>
           {scData?.configured && (
-            <Select value={scGranularity} onValueChange={(v) => setScGranularity(v as typeof scGranularity)}>
-              <SelectTrigger className="w-[130px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SEARCH_GRANULARITY_OPTIONS.map((o) => (
-                  <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select
+                value={scGranularity}
+                onValueChange={(v) => {
+                  setScGranularity(v as typeof scGranularity)
+                  setScPeriodKey("all")
+                }}
+              >
+                <SelectTrigger className="w-[120px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {SEARCH_GRANULARITY_OPTIONS.map((o) => (
+                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select value={scPeriodKey} onValueChange={setScPeriodKey}>
+                <SelectTrigger className="w-[160px]">
+                  <Calendar className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">
+                    {scGranularity === "monthly"
+                      ? "All Months (~13m)"
+                      : scGranularity === "quarterly"
+                      ? "All Quarters"
+                      : "All Years"}
+                  </SelectItem>
+                  {scBuckets.slice().reverse().map((b) => (
+                    <SelectItem key={b.key} value={b.key}>
+                      {b.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
         </CardHeader>
         <CardContent>
@@ -693,9 +794,9 @@ export default function AnalyticsPage() {
                   </CardHeader>
                   <CardContent className="pb-4 px-4">
                     <div className="text-2xl font-bold text-violet-700">
-                      {formatCompact(scData.summary?.totalImpressions ?? 0)}
+                      {formatCompact(scSummary.impressions)}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">Last ~13 months</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{scSummary.label}</p>
                   </CardContent>
                 </Card>
 
@@ -707,9 +808,11 @@ export default function AnalyticsPage() {
                   </CardHeader>
                   <CardContent className="pb-4 px-4">
                     <div className="text-2xl font-bold text-cyan-700">
-                      {formatCompact(scData.summary?.totalClicks ?? 0)}
+                      {formatCompact(scSummary.clicks)}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">Landed on your sites</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {scPeriodKey === "all" ? "Landed on your sites" : `Clicks in ${scSummary.label}`}
+                    </p>
                   </CardContent>
                 </Card>
 
@@ -720,7 +823,7 @@ export default function AnalyticsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pb-4 px-4">
-                    <div className="text-2xl font-bold text-orange-700">{scData.summary?.avgCtr ?? 0}%</div>
+                    <div className="text-2xl font-bold text-orange-700">{scSummary.ctr}%</div>
                     <p className="text-xs text-muted-foreground mt-0.5">Click-through rate</p>
                   </CardContent>
                 </Card>
@@ -732,7 +835,7 @@ export default function AnalyticsPage() {
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pb-4 px-4">
-                    <div className="text-2xl font-bold text-teal-700">{scData.summary?.avgPosition ?? 0}</div>
+                    <div className="text-2xl font-bold text-teal-700">{scSummary.avgPosition}</div>
                     <p className="text-xs text-muted-foreground mt-0.5">Lower is better</p>
                   </CardContent>
                 </Card>
@@ -744,17 +847,44 @@ export default function AnalyticsPage() {
                   No search data for this period
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-xs text-muted-foreground px-1 pb-1">
+                    <span>Click any row below to filter stats for that period:</span>
+                    {scPeriodKey !== "all" && (
+                      <button
+                        onClick={() => setScPeriodKey("all")}
+                        className="text-violet-600 font-semibold hover:underline cursor-pointer"
+                      >
+                        Reset to All (~13m)
+                      </button>
+                    )}
+                  </div>
                   {scBuckets.map((b) => {
+                    const isSelected = scPeriodKey === b.key
                     const pct = (b.impressions / scMaxImpressions) * 100
                     return (
-                      <div key={b.key} className="flex items-center gap-3">
-                        <div className="w-14 text-xs font-medium text-muted-foreground text-right shrink-0">
+                      <div
+                        key={b.key}
+                        onClick={() => setScPeriodKey(isSelected ? "all" : b.key)}
+                        className={`flex items-center gap-3 p-1.5 rounded-lg transition-all cursor-pointer ${
+                          isSelected
+                            ? "bg-violet-100/90 ring-2 ring-violet-500 shadow-xs"
+                            : "hover:bg-stone-100/80"
+                        }`}
+                        title={`Click to filter by ${b.label}`}
+                      >
+                        <div
+                          className={`w-14 text-xs font-semibold text-right shrink-0 ${
+                            isSelected ? "text-violet-900" : "text-muted-foreground"
+                          }`}
+                        >
                           {b.label}
                         </div>
                         <div className="flex-1 h-8 bg-muted rounded-lg overflow-hidden">
                           <div
-                            className="h-full rounded-lg bg-violet-400 transition-all duration-500"
+                            className={`h-full rounded-lg transition-all duration-500 ${
+                              isSelected ? "bg-violet-600" : "bg-violet-400"
+                            }`}
                             style={{ width: `${Math.max(pct, pct > 0 ? 2 : 0)}%` }}
                           />
                         </div>
@@ -771,9 +901,23 @@ export default function AnalyticsPage() {
               )}
 
               {/* By site */}
-              {scData.bySite.length > 0 && (
+              {scSiteList.length > 0 && (
                 <div>
-                  <p className="text-sm font-medium mb-2">By Website</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-sm font-semibold text-stone-900">
+                      By Website {scPeriodKey !== "all" ? `(${scSummary.label})` : ""}
+                    </p>
+                    {scPeriodKey !== "all" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs text-violet-700 hover:text-violet-900"
+                        onClick={() => setScPeriodKey("all")}
+                      >
+                        Show All Time
+                      </Button>
+                    )}
+                  </div>
                   <Table>
                     <TableHeader>
                       <TableRow className="hover:bg-transparent">
@@ -786,9 +930,11 @@ export default function AnalyticsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {scData.bySite.map((s) => (
+                      {scSiteList.map((s) => (
                         <TableRow key={s.site}>
-                          <TableCell className="font-medium text-sm">{s.site.replace("sc-domain:", "")}</TableCell>
+                          <TableCell className="font-medium text-sm">
+                            {s.site.replace(/^https?:\/\//, "").replace("sc-domain:", "").replace(/\/$/, "")}
+                          </TableCell>
                           <TableCell className="text-center">
                             <Badge variant={s.outlet === "Unmapped" ? "outline" : "secondary"}>{s.outlet}</Badge>
                           </TableCell>
@@ -806,75 +952,6 @@ export default function AnalyticsPage() {
           )}
         </CardContent>
       </Card>
-
-      {/* Smart Insights — generated from real data */}
-      {!loading && data && s && (
-        <div className="grid gap-4 md:grid-cols-3">
-          {/* Best performer */}
-          {data.packagePerformance[0] && (
-            <Card className="bg-emerald-50 border-emerald-200">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-emerald-700 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" /> Top Package
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm">
-                  <strong>{data.packagePerformance[0].name}</strong> is your
-                  most booked package with{" "}
-                  <strong>{data.packagePerformance[0].bookings} bookings</strong>{" "}
-                  generating ₹{data.packagePerformance[0].revenue.toLocaleString()}.
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Best lead source */}
-          {data.leadSources[0] && (
-            <Card className="bg-blue-50 border-blue-200">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-blue-700 flex items-center gap-2">
-                  <ArrowUpRight className="h-4 w-4" /> Best Lead Source
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm">
-                  <strong className="capitalize">{data.leadSources[0].source}</strong> brings
-                  the most leads ({data.leadSources[0].total}).{" "}
-                  {data.leadSources.sort((a, b) => b.rate - a.rate)[0]?.source !== data.leadSources[0].source && (
-                    <>
-                      But <strong className="capitalize">
-                        {data.leadSources.sort((a, b) => b.rate - a.rate)[0].source}
-                      </strong> converts best at{" "}
-                      <strong>{data.leadSources.sort((a, b) => b.rate - a.rate)[0].rate}%</strong>.
-                    </>
-                  )}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Conversion insight */}
-          <Card className="bg-amber-50 border-amber-200">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-amber-700 flex items-center gap-2">
-                <Target className="h-4 w-4" /> Conversion Insight
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm">
-                {s.conversionRate >= 40 ? (
-                  <>Your <strong>{s.conversionRate}%</strong> conversion rate is excellent. Keep following up quickly on new leads.</>
-                ) : s.conversionRate >= 20 ? (
-                  <>Your conversion rate is <strong>{s.conversionRate}%</strong>. {s.totalLeads - s.convertedLeads} leads are unconverted — follow up today.</>
-                ) : (
-                  <>Only <strong>{s.conversionRate}%</strong> of leads convert. Try calling within 1 hour of enquiry to improve this.</>
-                )}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </div>
   )
 }

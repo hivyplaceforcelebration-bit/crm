@@ -3,6 +3,7 @@
 import {
   fetchAllSitesRows,
   isSearchConsoleConfigured,
+  getOutletForSite,
   SITE_OUTLET_MAP,
   type SearchConsoleRow,
   type SiteOutlet,
@@ -45,13 +46,23 @@ function yearLabel(key: string) {
   return key
 }
 
-type Bucket = {
+export type SitePerformance = {
+  site: string
+  outlet: SiteOutlet | "Unmapped"
+  clicks: number
+  impressions: number
+  ctr: number
+  position: number
+}
+
+export type Bucket = {
   key: string
   label: string
   clicks: number
   impressions: number
   ctr: number
   position: number
+  bySite: SitePerformance[]
 }
 
 function bucketRows(
@@ -59,14 +70,31 @@ function bucketRows(
   keyFn: (d: string) => string,
   labelFn: (k: string) => string
 ): Bucket[] {
-  const map: Record<string, { clicks: number; impressions: number; positionWeighted: number }> = {}
+  const map: Record<
+    string,
+    {
+      clicks: number
+      impressions: number
+      positionWeighted: number
+      siteMap: Record<string, { clicks: number; impressions: number; positionWeighted: number }>
+    }
+  > = {}
 
   rows.forEach((r) => {
     const key = keyFn(r.date)
-    if (!map[key]) map[key] = { clicks: 0, impressions: 0, positionWeighted: 0 }
+    if (!map[key]) {
+      map[key] = { clicks: 0, impressions: 0, positionWeighted: 0, siteMap: {} }
+    }
     map[key].clicks += r.clicks
     map[key].impressions += r.impressions
     map[key].positionWeighted += r.position * r.impressions
+
+    if (!map[key].siteMap[r.siteUrl]) {
+      map[key].siteMap[r.siteUrl] = { clicks: 0, impressions: 0, positionWeighted: 0 }
+    }
+    map[key].siteMap[r.siteUrl].clicks += r.clicks
+    map[key].siteMap[r.siteUrl].impressions += r.impressions
+    map[key].siteMap[r.siteUrl].positionWeighted += r.position * r.impressions
   })
 
   return Object.entries(map)
@@ -77,6 +105,16 @@ function bucketRows(
       impressions: v.impressions,
       ctr: v.impressions > 0 ? Math.round((v.clicks / v.impressions) * 1000) / 10 : 0,
       position: v.impressions > 0 ? Math.round((v.positionWeighted / v.impressions) * 10) / 10 : 0,
+      bySite: Object.entries(v.siteMap)
+        .map(([site, sv]) => ({
+          site,
+          outlet: getOutletForSite(site),
+          clicks: sv.clicks,
+          impressions: sv.impressions,
+          ctr: sv.impressions > 0 ? Math.round((sv.clicks / sv.impressions) * 1000) / 10 : 0,
+          position: sv.impressions > 0 ? Math.round((sv.positionWeighted / sv.impressions) * 10) / 10 : 0,
+        }))
+        .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions),
     }))
     .sort((a, b) => a.key.localeCompare(b.key))
 }
@@ -94,14 +132,7 @@ export type SearchConsoleData = {
   monthly: Bucket[]
   quarterly: Bucket[]
   yearly: Bucket[]
-  bySite: {
-    site: string
-    outlet: SiteOutlet | "Unmapped"
-    clicks: number
-    impressions: number
-    ctr: number
-    position: number
-  }[]
+  bySite: SitePerformance[]
 }
 
 const NOT_CONFIGURED: SearchConsoleData = {
@@ -132,16 +163,19 @@ export async function getSearchConsoleData(outlet?: string): Promise<SearchConso
   const start = new Date(end)
   start.setDate(start.getDate() - 395)
 
+  console.log(`[getSearchConsoleData] requested outlet: "${outlet}"`)
   let rows: SearchConsoleRow[]
   try {
     rows = await fetchAllSitesRows(toDateStr(start), toDateStr(end))
+    console.log(`[getSearchConsoleData] fetched ${rows.length} total rows from GSC`)
   } catch (err) {
     console.error("[search-console] getSearchConsoleData failed:", err)
     return NOT_CONFIGURED
   }
 
   if (outlet && outlet !== "all") {
-    rows = rows.filter((r) => SITE_OUTLET_MAP[r.siteUrl] === outlet)
+    rows = rows.filter((r) => getOutletForSite(r.siteUrl).toLowerCase() === outlet.toLowerCase())
+    console.log(`[getSearchConsoleData] after filtering by "${outlet}": ${rows.length} rows`)
   }
 
   const totalClicks = rows.reduce((s, r) => s + r.clicks, 0)
@@ -170,7 +204,7 @@ export async function getSearchConsoleData(outlet?: string): Promise<SearchConso
   const bySite = Object.entries(siteMap)
     .map(([site, v]) => ({
       site,
-      outlet: SITE_OUTLET_MAP[site] || ("Unmapped" as const),
+      outlet: getOutletForSite(site),
       clicks: v.clicks,
       impressions: v.impressions,
       ctr: v.impressions > 0 ? Math.round((v.clicks / v.impressions) * 1000) / 10 : 0,
